@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg
+*.egg-info/
+dist/
+build/
+*.so
+
+# Virtualenv
+venv/
+env/
+.venv/
+
+# Tests / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Environment / secrets
+.env
+*.env.local
+*.env.*.local
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDEs
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+
+# Large binaries y outputs no versionables
+*.pdf
+*.docx
+*.xlsx
+*.png
+*.jpg
+*.jpeg
+*.svg
+
+# Expedientes piloto (datos propietarios)
+expediente-EIA-2026-RECIMETAL-*/
+
+# Mapas / cartografia generados
+cartografia/mapas/
+*/cartografia/mapas/
+*/clima/*.png
+
+# Claude Code internals
+.claude/

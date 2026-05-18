@@ -1,0 +1,2008 @@
+#!/usr/bin/env python3
+"""
+run_expediente.py — CLI-01
+Runner básico para EIA-Agent v2.1.
+
+No ejecuta agentes reales ni genera fases.
+Proporciona acceso desde consola a los módulos de productización:
+  status, validate, gate, recover, log-summary, phase1, phase2, phase3,
+  phase4-precheck, phase4-climate, cartography-plan, schematic-maps,
+  phase4-offline, inventory-build, inventory-gate,
+  phase6-actions, phase6-identify-impacts, phase6-assign-conesa,
+  phase6-generate-measures, phase6-generate-pva,
+  phase6-validate-pva, phase6-cumulative, audit-art45, audit-prudence,
+  document-manifest, document-build-md.
+
+Uso:
+    python run_expediente.py <expediente> status
+    python run_expediente.py <expediente> validate
+    python run_expediente.py <expediente> gate <fase> [--prod]
+    python run_expediente.py <expediente> recover [--write-report]
+    python run_expediente.py <expediente> log-summary
+    python run_expediente.py <expediente> phase1 [--write]
+    python run_expediente.py <expediente> phase2 [--write] [--prod]
+    python run_expediente.py <expediente> phase3 [--write]
+    python run_expediente.py <expediente> phase4-precheck [--write]
+    python run_expediente.py <expediente> phase4-climate --stations <f> --climate-data <f> [--write]
+    python run_expediente.py <expediente> cartography-plan [--write]
+    python run_expediente.py <expediente> schematic-maps [--plan <f>] [--write]
+    python run_expediente.py <expediente> phase4-offline --stations <f> --climate-data <f> [--write]
+    python run_expediente.py <expediente> inventory-build [--write]
+    python run_expediente.py <expediente> inventory-gate [--write] [--prod]
+    python run_expediente.py <expediente> phase6-actions [--write]
+    python run_expediente.py <expediente> phase6-identify-impacts [--write]
+    python run_expediente.py <expediente> phase6-assign-conesa [--write] [--no-score]
+    python run_expediente.py <expediente> phase6-generate-measures [--write]
+    python run_expediente.py <expediente> phase6-generate-pva [--write]
+"""
+import argparse
+import sys
+from pathlib import Path
+
+# Asegurar que src/ está en el path cuando se ejecuta desde la raíz del proyecto
+sys.path.insert(0, str(Path(__file__).parent / "src"))
+
+from eia_agent.core.gate_checker import GateChecker
+from eia_agent.core.orchestrator_log import OrchestratorLog
+from eia_agent.core.schema_validator import validate_expediente
+from eia_agent.core.session_recovery import SessionRecovery
+
+_STATE_FILE = Path("control_interno") / "orchestrator_state.json"
+
+
+# ---------------------------------------------------------------------------
+# Comandos
+# ---------------------------------------------------------------------------
+
+def cmd_status(exp_path: Path) -> int:
+    """Muestra el estado del orquestador. No crea archivos si no existe estado."""
+    state_path = exp_path / _STATE_FILE
+    if not state_path.exists():
+        print(f"Expediente : {exp_path.name}")
+        print("Estado     : sin estado de orquestador")
+        print("Acción     : ejecute una fase primero para inicializar el orquestador.")
+        return 0
+
+    # El estado ya existe: cargar EIAOrchestrator de forma segura (no crea archivos nuevos)
+    from eia_agent.core.orchestrator import EIAOrchestrator
+    try:
+        orch = EIAOrchestrator(exp_path)
+        print(orch.summary())
+        return 0
+    except Exception as exc:
+        print(f"Error al cargar estado: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_validate(exp_path: Path) -> int:
+    """Valida los schemas del expediente y muestra el resumen."""
+    result = validate_expediente(exp_path)
+    print(result.summary())
+    return 0 if result.is_valid() else 1
+
+
+def cmd_gate(exp_path: Path, phase: str, prod: bool) -> int:
+    """Evalúa el gate de una fase. test_mode por defecto; --prod activa modo estricto."""
+    test_mode = not prod
+    gc = GateChecker(exp_path, test_mode=test_mode)
+    result = gc.check_phase(phase)
+    print(result.summary())
+    return 0 if not result.is_blocked() else 1
+
+
+def cmd_recover(exp_path: Path, write_report: bool) -> int:
+    """Diagnostica sesiones interrumpidas. Solo escribe si se pasa --write-report."""
+    sr = SessionRecovery(exp_path)
+    report = sr.analyze()
+    print(report.summary())
+    if write_report:
+        path = sr.write_recovery_report(report)
+        print(f"Informe escrito: {path}")
+    return 0 if report.can_continue else 1
+
+
+def cmd_log_summary(exp_path: Path) -> int:
+    """Muestra el resumen del log del orquestador. No crea eventos."""
+    log = OrchestratorLog(exp_path)
+    print(log.summary())
+    return 0
+
+
+def cmd_phase2(exp_path: Path, write: bool, prod: bool) -> int:
+    """Ejecuta el pipeline de Fase 2 (OB-06). Por defecto solo lectura, test_mode=True."""
+    from eia_agent.core.phase2_pipeline import run_phase2
+    test_mode = not prod
+    try:
+        result = run_phase2(exp_path, write_outputs=write, test_mode=test_mode)
+        print(result.summary())
+        if write:
+            out_dir = exp_path / "control_interno"
+            print(f"\nOutputs escritos en: {out_dir}")
+        return 0
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en Fase 2: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_phase4_climate(
+    exp_path: Path,
+    stations: str,
+    climate_data: str,
+    write: bool,
+) -> int:
+    """Ejecuta el pipeline climático de Fase 4 (CL-06). Por defecto solo lectura."""
+    from eia_agent.core.phase4_climate_pipeline import run_phase4_climate
+    try:
+        result = run_phase4_climate(
+            exp_path,
+            stations_path=stations,
+            climate_data_path=climate_data,
+            write_outputs=write,
+        )
+        print(result.summary())
+        if write:
+            print(f"\nOutputs escritos en: {exp_path / 'clima'}")
+        return 0
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"Error de datos: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en pipeline climático Fase 4: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_phase4_precheck(exp_path: Path, write: bool) -> int:
+    """Ejecuta el precheck de Fase 4 (CA-08). Por defecto solo lectura."""
+    from eia_agent.core.phase4_precheck import run_phase4_precheck
+    try:
+        result = run_phase4_precheck(exp_path, write_outputs=write)
+        print(result.summary())
+        if write:
+            out_dir = exp_path / "control_interno"
+            print(f"\nOutputs escritos en: {out_dir}")
+        return 0 if result.error_count() == 0 else 1
+    except Exception as exc:
+        print(f"Error en precheck Fase 4: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_phase3(exp_path: Path, write: bool) -> int:
+    """Ejecuta el pipeline de Fase 3 (TN-05). Por defecto solo lectura."""
+    from eia_agent.core.phase3_pipeline import run_phase3
+    try:
+        result = run_phase3(exp_path, write_outputs=write)
+        print(result.summary())
+        if write:
+            out_dir = exp_path / "control_interno"
+            print(f"\nOutputs escritos en: {out_dir}")
+        return 0
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en Fase 3: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_schematic_maps(exp_path: Path, plan: str | None, write: bool) -> int:
+    """Genera (o previsualiza) mapas esquemáticos offline de Fase 4 (CA-11)."""
+    from eia_agent.core.schematic_map_generator import (
+        load_cartography_plan,
+        generate_schematic_maps_from_plan,
+        build_map_generation_report,
+        SchematicMapConfig,
+    )
+    plan_path = Path(plan) if plan else exp_path / "cartografia" / "cartografia_plan.json"
+    try:
+        data = load_cartography_plan(plan_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"Error de plan: {exc}", file=sys.stderr)
+        return 1
+
+    if not write:
+        maps = data.get("maps", [])
+        print(f"Plan cartográfico cargado: {len(maps)} mapas")
+        print(f"Directorio de salida (con --write): {exp_path / 'cartografia' / 'mapas'}")
+        print()
+        for m in maps:
+            print(f"  {m.get('map_id', '?')} -> {m.get('output_filename', '?')}")
+        print()
+        print("Use --write para generar los PNGs.")
+        return 0
+
+    out_dir = exp_path / "cartografia" / "mapas"
+    try:
+        config = SchematicMapConfig()
+        results = generate_schematic_maps_from_plan(plan_path, out_dir, config)
+        report = build_map_generation_report(results)
+        print(report)
+        generated = sum(1 for r in results if r.status == "GENERATED_PROVISIONAL")
+        print(f"\n{generated}/{len(results)} mapas generados en: {out_dir}")
+        return 0
+    except Exception as exc:
+        print(f"Error generando mapas: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_cartography_plan(exp_path: Path, write: bool) -> int:
+    """Genera el plan cartográfico offline de Fase 4 (CA-10). Por defecto solo lectura."""
+    from eia_agent.core.cartography_plan import build_cartography_plan
+    try:
+        result = build_cartography_plan(exp_path, write_outputs=write)
+        print(result.summary())
+        if write:
+            out_dir = exp_path / "cartografia"
+            print(f"\nOutputs escritos en: {out_dir}")
+        return 0
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"Error de datos: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en plan cartográfico: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_phase4_offline(
+    exp_path: Path,
+    stations: str,
+    climate_data: str,
+    write: bool,
+) -> int:
+    """Pipeline integrador Fase 4 offline: CA-08 + CL-06 + CA-10 + CA-11 (F4-01)."""
+    from eia_agent.core.phase4_offline_pipeline import run_phase4_offline
+    try:
+        result = run_phase4_offline(
+            exp_path,
+            stations_path=stations,
+            climate_data_path=climate_data,
+            write_outputs=write,
+        )
+        print(result.summary())
+        if write:
+            print(f"\nOutputs escritos en: {exp_path / 'fase4'}")
+        return 0
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"Error de datos: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en pipeline Fase 4 offline: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_inventory_build(exp_path: Path, write: bool) -> int:
+    """Construye el inventario ambiental inicial (Fase 5) desde los outputs de Fase 4 (IV-02)."""
+    from eia_agent.core.inventory_builder import build_inventory_from_phase4
+    try:
+        result = build_inventory_from_phase4(exp_path, write_outputs=write)
+        print(result.summary())
+        if write:
+            out_dir = exp_path / "inventario"
+            print(f"\nOutputs escritos en: {out_dir}")
+        return 0
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"Error de datos: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en inventory-build: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_phase6_actions(exp_path: Path, write: bool) -> int:
+    """Construye acciones de Fase 6 desde phase2_result.json (IM-02). Por defecto solo lectura."""
+    import json as _json
+    from eia_agent.core.project_action_builder import (
+        build_actions_from_phase2_data,
+        build_phase6_model_with_actions,
+    )
+
+    phase2_path = exp_path / "control_interno" / "phase2_result.json"
+    phase2_data = None
+    if phase2_path.exists():
+        try:
+            with open(phase2_path, encoding="utf-8") as f:
+                phase2_data = _json.load(f)
+        except _json.JSONDecodeError as exc:
+            print(f"Error: JSON inválido en {phase2_path}: {exc}", file=sys.stderr)
+            return 1
+        except OSError as exc:
+            print(f"Error leyendo {phase2_path}: {exc}", file=sys.stderr)
+            return 1
+    else:
+        print(f"Aviso: no se encontró {phase2_path}. Se generará acción mínima.")
+
+    build_result = build_actions_from_phase2_data(phase2_data)
+    print(build_result.summary())
+
+    if not write:
+        return 0
+
+    impactos_dir = exp_path / "impactos"
+    impactos_dir.mkdir(parents=True, exist_ok=True)
+
+    actions_path = impactos_dir / "phase6_actions.json"
+    with open(actions_path, "w", encoding="utf-8") as f:
+        _json.dump(build_result.to_dict(), f, ensure_ascii=False, indent=2)
+
+    model = build_phase6_model_with_actions(exp_path.name, phase2_data)
+    model_path = impactos_dir / "phase6_model_base.json"
+    with open(model_path, "w", encoding="utf-8") as f:
+        _json.dump(model.to_dict(), f, ensure_ascii=False, indent=2)
+
+    print(f"\nOutputs escritos:")
+    print(f"  {actions_path}")
+    print(f"  {model_path}")
+    return 0
+
+
+def cmd_phase6_identify_impacts(exp_path: Path, write: bool) -> int:
+    """Identifica impactos preliminares accion x receptor para Fase 6 (IM-03)."""
+    import dataclasses as _dc
+    import json as _json
+    from eia_agent.core.impact_identifier import (
+        build_minimal_receptor_factors,
+        build_phase6_model_with_identified_impacts,
+        identify_impacts_from_model,
+    )
+    from eia_agent.core.impact_model import Phase6Model, ProjectAction, ReceptorFactor
+
+    # --- Intentar cargar phase6_model_base.json (output de IM-02) ---
+    model_base_path = exp_path / "impactos" / "phase6_model_base.json"
+    model: Phase6Model | None = None
+
+    if model_base_path.exists():
+        try:
+            with open(model_base_path, encoding="utf-8") as f:
+                data = _json.load(f)
+            expediente_id = data.get("expediente_id", exp_path.name)
+            actions = [
+                ProjectAction(
+                    action_id=a["action_id"],
+                    name=a["name"],
+                    description=a.get("description", ""),
+                    action_type=a.get("action_type", "OTRO"),
+                    operation_code=a.get("operation_code"),
+                    source_refs=a.get("source_refs", []),
+                    notes=a.get("notes", []),
+                )
+                for a in data.get("actions", [])
+            ]
+            receptor_factors = [
+                ReceptorFactor(
+                    receptor_id=r["receptor_id"],
+                    inventory_factor_id=r["inventory_factor_id"],
+                    name=r["name"],
+                    inventory_semaphore=r.get("inventory_semaphore", "NO_CONSTA"),
+                    ready_from_inventory=r.get("ready_from_inventory", False),
+                    critical_gaps=r.get("critical_gaps", []),
+                    notes=r.get("notes", []),
+                )
+                for r in data.get("receptor_factors", [])
+            ]
+            model = Phase6Model(
+                expediente_id=expediente_id,
+                actions=actions,
+                receptor_factors=receptor_factors,
+            )
+        except (_json.JSONDecodeError, KeyError, TypeError) as exc:
+            print(f"Error: JSON invalido en {model_base_path}: {exc}", file=sys.stderr)
+            return 1
+    else:
+        # Sin modelo base: construir desde phase2_result.json si existe
+        print(
+            f"Aviso: no se encontro {model_base_path}. "
+            "Ejecute phase6-actions --write primero para mejores resultados."
+        )
+        from eia_agent.core.project_action_builder import build_phase6_model_with_actions
+        phase2_path = exp_path / "control_interno" / "phase2_result.json"
+        phase2_data = None
+        if phase2_path.exists():
+            try:
+                with open(phase2_path, encoding="utf-8") as f:
+                    phase2_data = _json.load(f)
+            except _json.JSONDecodeError:
+                pass
+        model = build_phase6_model_with_actions(exp_path.name, phase2_data)
+
+    # Si no hay factores receptores, usar los 16 por defecto
+    if not model.receptor_factors:
+        print(
+            "Aviso: sin factores receptores en el modelo. "
+            "Se usan 16 factores por defecto (sin datos de inventario)."
+        )
+        model = _dc.replace(model, receptor_factors=build_minimal_receptor_factors())
+
+    result = identify_impacts_from_model(model)
+    print(result.summary())
+
+    if not write:
+        return 0
+
+    impactos_dir = exp_path / "impactos"
+    impactos_dir.mkdir(parents=True, exist_ok=True)
+
+    result_path = impactos_dir / "impact_identification_result.json"
+    with open(result_path, "w", encoding="utf-8") as f:
+        _json.dump(result.to_dict(), f, ensure_ascii=False, indent=2)
+
+    model_with_impacts = build_phase6_model_with_identified_impacts(model)
+    model_path = impactos_dir / "phase6_model_with_impacts.json"
+    with open(model_path, "w", encoding="utf-8") as f:
+        _json.dump(model_with_impacts.to_dict(), f, ensure_ascii=False, indent=2)
+
+    print(f"\nOutputs escritos:")
+    print(f"  {result_path}")
+    print(f"  {model_path}")
+    return 0
+
+
+def cmd_phase6_assign_conesa(exp_path: Path, write: bool, no_score: bool) -> int:
+    """Asigna atributos Conesa a impactos identificados en Fase 6 (IM-04)."""
+    import json as _json
+    from eia_agent.core.conesa_attribute_assigner import assign_conesa_attributes_to_model
+    from eia_agent.core.impact_model import (
+        ConesaAttributes,
+        EnvironmentalImpact,
+        Phase6Model,
+        ProjectAction,
+        ReceptorFactor,
+    )
+
+    # --- Intentar cargar phase6_model_with_impacts.json (output de IM-03) ---
+    model_path = exp_path / "impactos" / "phase6_model_with_impacts.json"
+
+    if not model_path.exists():
+        print(
+            f"Aviso: no se encontro {model_path}.\n"
+            "Ejecute primero: phase6-identify-impacts --write"
+        )
+        return 0
+
+    try:
+        with open(model_path, encoding="utf-8") as f:
+            data = _json.load(f)
+
+        expediente_id = data.get("expediente_id", exp_path.name)
+
+        actions = [
+            ProjectAction(
+                action_id=a["action_id"],
+                name=a["name"],
+                description=a.get("description", ""),
+                action_type=a.get("action_type", "OTRO"),
+                operation_code=a.get("operation_code"),
+                source_refs=a.get("source_refs", []),
+                notes=a.get("notes", []),
+            )
+            for a in data.get("actions", [])
+        ]
+
+        receptor_factors = [
+            ReceptorFactor(
+                receptor_id=r["receptor_id"],
+                inventory_factor_id=r["inventory_factor_id"],
+                name=r["name"],
+                inventory_semaphore=r.get("inventory_semaphore", "NO_CONSTA"),
+                ready_from_inventory=r.get("ready_from_inventory", False),
+                critical_gaps=r.get("critical_gaps", []),
+                notes=r.get("notes", []),
+            )
+            for r in data.get("receptor_factors", [])
+        ]
+
+        impacts = [
+            EnvironmentalImpact(
+                impact_id=imp["impact_id"],
+                action_id=imp["action_id"],
+                receptor_id=imp["receptor_id"],
+                name=imp["name"],
+                description=imp.get("description", ""),
+                nature=imp.get("nature", "INDETERMINADO"),
+                status=imp.get("status", "PENDIENTE_DATOS"),
+                significance_without_measures=imp.get(
+                    "significance_without_measures", "NO_VALORADO"
+                ),
+                significance_with_measures=imp.get(
+                    "significance_with_measures", "NO_VALORADO"
+                ),
+                conesa_attributes=ConesaAttributes(
+                    **{k: v for k, v in imp.get("conesa_attributes", {}).items()}
+                ),
+                data_gaps=imp.get("data_gaps", []),
+                source_refs=imp.get("source_refs", []),
+                measure_ids=imp.get("measure_ids", []),
+                pva_ids=imp.get("pva_ids", []),
+                warnings=imp.get("warnings", []),
+                notes=imp.get("notes", []),
+            )
+            for imp in data.get("impacts", [])
+        ]
+
+        model = Phase6Model(
+            expediente_id=expediente_id,
+            actions=actions,
+            receptor_factors=receptor_factors,
+            impacts=impacts,
+            warnings=data.get("warnings", []),
+            notes=data.get("notes", []),
+        )
+
+    except (_json.JSONDecodeError, KeyError, TypeError) as exc:
+        print(f"Error: JSON invalido en {model_path}: {exc}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"Error leyendo {model_path}: {exc}", file=sys.stderr)
+        return 1
+
+    score = not no_score
+    result = assign_conesa_attributes_to_model(model, score=score)
+    print(result.summary())
+
+    if not write:
+        return 0
+
+    impactos_dir = exp_path / "impactos"
+    impactos_dir.mkdir(parents=True, exist_ok=True)
+
+    # Escribir el modelo actualizado
+    conesa_model_path = impactos_dir / "phase6_model_with_conesa.json"
+    with open(conesa_model_path, "w", encoding="utf-8") as f:
+        _json.dump(result.model.to_dict(), f, ensure_ascii=False, indent=2)
+
+    # Escribir el resultado de asignación (sin el modelo completo para ligereza)
+    result_dict = {
+        "assigned_count": result.assigned_count,
+        "scored_count": result.scored_count,
+        "indeterminate_count": result.indeterminate_count,
+        "skipped_count": result.skipped_count,
+        "no_rule_count": result.no_rule_count,
+        "warnings": result.warnings,
+        "notes": result.notes,
+    }
+    result_path = impactos_dir / "conesa_assignment_result.json"
+    with open(result_path, "w", encoding="utf-8") as f:
+        _json.dump(result_dict, f, ensure_ascii=False, indent=2)
+
+    print(f"\nOutputs escritos:")
+    print(f"  {conesa_model_path}")
+    print(f"  {result_path}")
+    return 0
+
+
+def cmd_phase6_generate_measures(exp_path: Path, write: bool) -> int:
+    """Genera medidas ambientales por tipo de impacto para Fase 6 (IM-05)."""
+    import json as _json
+    from eia_agent.core.mitigation_measure_generator import (
+        default_measure_generation_rules,
+        generate_measures_for_model,
+    )
+    from eia_agent.core.impact_model import (
+        ConesaAttributes,
+        EnvironmentalImpact,
+        MitigationMeasure,
+        Phase6Model,
+        ProjectAction,
+        ReceptorFactor,
+    )
+
+    impactos_dir = exp_path / "impactos"
+    conesa_path = impactos_dir / "phase6_model_with_conesa.json"
+    impacts_path = impactos_dir / "phase6_model_with_impacts.json"
+
+    if conesa_path.exists():
+        model_path = conesa_path
+    elif impacts_path.exists():
+        model_path = impacts_path
+        print(f"Aviso: usando {impacts_path.name} (no se encontro phase6_model_with_conesa.json)")
+    else:
+        print(
+            f"Error: no se encontro ningun modelo de impactos en {impactos_dir}.\n"
+            "Ejecute primero: phase6-assign-conesa --write  (o phase6-identify-impacts --write)",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        with open(model_path, encoding="utf-8") as f:
+            data = _json.load(f)
+
+        expediente_id = data.get("expediente_id", exp_path.name)
+
+        actions = [
+            ProjectAction(
+                action_id=a["action_id"],
+                name=a["name"],
+                description=a.get("description", ""),
+                action_type=a.get("action_type", "OTRO"),
+                operation_code=a.get("operation_code"),
+                source_refs=a.get("source_refs", []),
+                notes=a.get("notes", []),
+            )
+            for a in data.get("actions", [])
+        ]
+
+        receptor_factors = [
+            ReceptorFactor(
+                receptor_id=r["receptor_id"],
+                inventory_factor_id=r["inventory_factor_id"],
+                name=r["name"],
+                inventory_semaphore=r.get("inventory_semaphore", "NO_CONSTA"),
+                ready_from_inventory=r.get("ready_from_inventory", False),
+                critical_gaps=r.get("critical_gaps", []),
+                notes=r.get("notes", []),
+            )
+            for r in data.get("receptor_factors", [])
+        ]
+
+        impacts = [
+            EnvironmentalImpact(
+                impact_id=imp["impact_id"],
+                action_id=imp["action_id"],
+                receptor_id=imp["receptor_id"],
+                name=imp["name"],
+                description=imp.get("description", ""),
+                nature=imp.get("nature", "INDETERMINADO"),
+                status=imp.get("status", "PENDIENTE_DATOS"),
+                significance_without_measures=imp.get(
+                    "significance_without_measures", "NO_VALORADO"
+                ),
+                significance_with_measures=imp.get(
+                    "significance_with_measures", "NO_VALORADO"
+                ),
+                conesa_attributes=ConesaAttributes(
+                    **{k: v for k, v in imp.get("conesa_attributes", {}).items()}
+                ),
+                data_gaps=imp.get("data_gaps", []),
+                source_refs=imp.get("source_refs", []),
+                measure_ids=imp.get("measure_ids", []),
+                pva_ids=imp.get("pva_ids", []),
+                warnings=imp.get("warnings", []),
+                notes=imp.get("notes", []),
+            )
+            for imp in data.get("impacts", [])
+        ]
+
+        existing_measures = [
+            MitigationMeasure(
+                measure_id=m["measure_id"],
+                name=m["name"],
+                description=m.get("description", ""),
+                measure_type=m.get("measure_type", "CORRECTORA"),
+                status=m.get("status", "PROPUESTA"),
+                target_impact_ids=m.get("target_impact_ids", []),
+                is_diagnostic=m.get("is_diagnostic", False),
+                is_prl_only=m.get("is_prl_only", False),
+                condition_before_submission=m.get("condition_before_submission", False),
+                warnings=m.get("warnings", []),
+                notes=m.get("notes", []),
+            )
+            for m in data.get("measures", [])
+        ]
+
+        model = Phase6Model(
+            expediente_id=expediente_id,
+            actions=actions,
+            receptor_factors=receptor_factors,
+            impacts=impacts,
+            measures=existing_measures,
+            warnings=data.get("warnings", []),
+            notes=data.get("notes", []),
+        )
+
+    except (_json.JSONDecodeError, KeyError, TypeError) as exc:
+        print(f"Error: JSON invalido en {model_path}: {exc}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"Error leyendo {model_path}: {exc}", file=sys.stderr)
+        return 1
+
+    rules = default_measure_generation_rules()
+    result = generate_measures_for_model(model, rules)
+    print(result.summary())
+
+    if not write:
+        return 0
+
+    impactos_dir.mkdir(parents=True, exist_ok=True)
+
+    measures_model_path = impactos_dir / "phase6_model_with_measures.json"
+    with open(measures_model_path, "w", encoding="utf-8") as f:
+        _json.dump(result.model.to_dict(), f, ensure_ascii=False, indent=2)
+
+    result_dict = {
+        "generated_count": result.generated_count,
+        "diagnostic_count": result.diagnostic_count,
+        "prl_only_count": result.prl_only_count,
+        "condition_before_submission_count": result.condition_before_submission_count,
+        "measures": [m.to_dict() for m in result.model.measures],
+        "warnings": result.warnings,
+        "notes": result.notes,
+    }
+    result_path = impactos_dir / "measure_generation_result.json"
+    with open(result_path, "w", encoding="utf-8") as f:
+        _json.dump(result_dict, f, ensure_ascii=False, indent=2)
+
+    print(f"\nOutputs escritos:")
+    print(f"  {measures_model_path}")
+    print(f"  {result_path}")
+    return 0
+
+
+def cmd_phase6_generate_pva(exp_path: Path, write: bool) -> int:
+    """Genera fichas del Programa de Vigilancia Ambiental para Fase 6 (IM-06)."""
+    import json as _json
+    from eia_agent.core.pva_generator import (
+        default_pva_generation_rules,
+        generate_pva_for_model,
+    )
+    from eia_agent.core.impact_model import (
+        ConesaAttributes,
+        EnvironmentalImpact,
+        MitigationMeasure,
+        Phase6Model,
+        ProjectAction,
+        ReceptorFactor,
+    )
+
+    impactos_dir = exp_path / "impactos"
+    measures_path = impactos_dir / "phase6_model_with_measures.json"
+    conesa_path = impactos_dir / "phase6_model_with_conesa.json"
+    impacts_path = impactos_dir / "phase6_model_with_impacts.json"
+
+    if measures_path.exists():
+        model_path = measures_path
+    elif conesa_path.exists():
+        model_path = conesa_path
+        print(f"Aviso: usando {conesa_path.name} (no se encontro phase6_model_with_measures.json)")
+    elif impacts_path.exists():
+        model_path = impacts_path
+        print(f"Aviso: usando {impacts_path.name} (no se encontro phase6_model_with_measures.json)")
+    else:
+        print(
+            f"Error: no se encontro ningun modelo de impactos en {impactos_dir}.\n"
+            "Ejecute primero: phase6-generate-measures --write",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        with open(model_path, encoding="utf-8") as f:
+            data = _json.load(f)
+
+        expediente_id = data.get("expediente_id", exp_path.name)
+
+        actions = [
+            ProjectAction(
+                action_id=a["action_id"],
+                name=a["name"],
+                description=a.get("description", ""),
+                action_type=a.get("action_type", "OTRO"),
+                operation_code=a.get("operation_code"),
+                source_refs=a.get("source_refs", []),
+                notes=a.get("notes", []),
+            )
+            for a in data.get("actions", [])
+        ]
+
+        receptor_factors = [
+            ReceptorFactor(
+                receptor_id=r["receptor_id"],
+                inventory_factor_id=r["inventory_factor_id"],
+                name=r["name"],
+                inventory_semaphore=r.get("inventory_semaphore", "NO_CONSTA"),
+                ready_from_inventory=r.get("ready_from_inventory", False),
+                critical_gaps=r.get("critical_gaps", []),
+                notes=r.get("notes", []),
+            )
+            for r in data.get("receptor_factors", [])
+        ]
+
+        impacts = [
+            EnvironmentalImpact(
+                impact_id=imp["impact_id"],
+                action_id=imp["action_id"],
+                receptor_id=imp["receptor_id"],
+                name=imp["name"],
+                description=imp.get("description", ""),
+                nature=imp.get("nature", "INDETERMINADO"),
+                status=imp.get("status", "PENDIENTE_DATOS"),
+                significance_without_measures=imp.get(
+                    "significance_without_measures", "NO_VALORADO"
+                ),
+                significance_with_measures=imp.get(
+                    "significance_with_measures", "NO_VALORADO"
+                ),
+                conesa_attributes=ConesaAttributes(
+                    **{k: v for k, v in imp.get("conesa_attributes", {}).items()}
+                ),
+                data_gaps=imp.get("data_gaps", []),
+                source_refs=imp.get("source_refs", []),
+                measure_ids=imp.get("measure_ids", []),
+                pva_ids=imp.get("pva_ids", []),
+                warnings=imp.get("warnings", []),
+                notes=imp.get("notes", []),
+            )
+            for imp in data.get("impacts", [])
+        ]
+
+        measures = [
+            MitigationMeasure(
+                measure_id=m["measure_id"],
+                name=m["name"],
+                description=m.get("description", ""),
+                measure_type=m.get("measure_type", "CORRECTORA"),
+                status=m.get("status", "PROPUESTA"),
+                target_impact_ids=m.get("target_impact_ids", []),
+                is_diagnostic=m.get("is_diagnostic", False),
+                is_prl_only=m.get("is_prl_only", False),
+                condition_before_submission=m.get("condition_before_submission", False),
+                warnings=m.get("warnings", []),
+                notes=m.get("notes", []),
+            )
+            for m in data.get("measures", [])
+        ]
+
+        model = Phase6Model(
+            expediente_id=expediente_id,
+            actions=actions,
+            receptor_factors=receptor_factors,
+            impacts=impacts,
+            measures=measures,
+            warnings=data.get("warnings", []),
+            notes=data.get("notes", []),
+        )
+
+    except (_json.JSONDecodeError, KeyError, TypeError) as exc:
+        print(f"Error: JSON invalido en {model_path}: {exc}", file=sys.stderr)
+        return 1
+    except OSError as exc:
+        print(f"Error leyendo {model_path}: {exc}", file=sys.stderr)
+        return 1
+
+    rules = default_pva_generation_rules()
+    result = generate_pva_for_model(model, rules)
+    print(result.summary())
+
+    if not write:
+        return 0
+
+    impactos_dir.mkdir(parents=True, exist_ok=True)
+
+    pva_model_path = impactos_dir / "phase6_model_with_pva.json"
+    with open(pva_model_path, "w", encoding="utf-8") as f:
+        _json.dump(result.model.to_dict(), f, ensure_ascii=False, indent=2)
+
+    result_dict = {
+        "generated_count": result.generated_count,
+        "conditioned_count": result.conditioned_count,
+        "uncovered_impact_ids": result.uncovered_impact_ids,
+        "coverage_notes": result.coverage_notes,
+        "pva_programs": [p.to_dict() for p in result.model.pva_programs],
+        "warnings": result.warnings,
+        "notes": result.notes,
+    }
+    result_path = impactos_dir / "pva_generation_result.json"
+    with open(result_path, "w", encoding="utf-8") as f:
+        _json.dump(result_dict, f, ensure_ascii=False, indent=2)
+
+    print(f"\nOutputs escritos:")
+    print(f"  {pva_model_path}")
+    print(f"  {result_path}")
+    return 0
+
+
+def cmd_phase6_cumulative(exp_path: Path, write: bool) -> int:
+    """Genera la sección C.5 de efectos acumulativos y sinérgicos (IM-08)."""
+    import json as _json
+    from eia_agent.core.cumulative_synergistic_section import (
+        build_cumulative_synergistic_section_from_json,
+        write_cumulative_synergistic_outputs,
+    )
+
+    impactos_dir = exp_path / "impactos"
+    candidates = [
+        impactos_dir / "phase6_model_with_pva.json",
+        impactos_dir / "phase6_model_with_measures.json",
+        impactos_dir / "phase6_model_with_conesa.json",
+        impactos_dir / "phase6_model_with_impacts.json",
+    ]
+
+    model_path = None
+    for candidate in candidates:
+        if candidate.exists():
+            model_path = candidate
+            break
+
+    if model_path is None:
+        print(
+            f"Error: no se encontro ningun modelo de Fase 6 en {impactos_dir}.\n"
+            "Ejecute primero uno de:\n"
+            "  phase6-generate-pva --write\n"
+            "  phase6-generate-measures --write\n"
+            "  phase6-identify-impacts --write",
+            file=sys.stderr,
+        )
+        return 1
+
+    if model_path.name != "phase6_model_with_pva.json":
+        print(f"Aviso: usando {model_path.name} (phase6_model_with_pva.json no encontrado)")
+
+    try:
+        result = build_cumulative_synergistic_section_from_json(model_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"Error de datos: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error generando C.5: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        impactos_dir.mkdir(parents=True, exist_ok=True)
+        json_path, md_path = write_cumulative_synergistic_outputs(result, impactos_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0
+
+
+def cmd_phase6_validate_pva(exp_path: Path, write: bool) -> int:
+    """Valida la cobertura PVA de los impactos de Fase 6 (IM-07)."""
+    import json as _json
+    from eia_agent.core.pva_coverage_validator import (
+        validate_pva_coverage_from_json,
+        write_pva_coverage_outputs,
+    )
+
+    impactos_dir = exp_path / "impactos"
+    pva_path = impactos_dir / "phase6_model_with_pva.json"
+    measures_path = impactos_dir / "phase6_model_with_measures.json"
+
+    if pva_path.exists():
+        model_path = pva_path
+    elif measures_path.exists():
+        model_path = measures_path
+        print(f"Aviso: usando {measures_path.name} (no se encontro phase6_model_with_pva.json)")
+    else:
+        print(
+            f"Error: no se encontro ningun modelo de Fase 6 en {impactos_dir}.\n"
+            "Ejecute primero: phase6-generate-pva --write  (o phase6-generate-measures --write)",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        result = validate_pva_coverage_from_json(model_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"Error de datos: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en validacion de cobertura PVA: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        impactos_dir.mkdir(parents=True, exist_ok=True)
+        json_path, md_path = write_pva_coverage_outputs(result, impactos_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_valid() else 1
+
+
+def cmd_run_technical_pipeline(
+    exp_path: Path,
+    write: bool,
+    prod: bool,
+    continue_on_error: bool,
+) -> int:
+    """Pipeline tecnico automatico Fase5->Auditoria final (PIPE-01)."""
+    from eia_agent.core.technical_pipeline import (
+        run_technical_pipeline,
+        write_pipeline_outputs,
+    )
+
+    mode = "PROD" if prod else "TEST"
+    try:
+        result = run_technical_pipeline(
+            exp_path,
+            write_outputs=write,
+            mode=mode,
+            stop_on_error=not continue_on_error,
+        )
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en pipeline tecnico: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_pipeline_outputs(result, auditoria_dir)
+        print(f"\nInforme de pipeline:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_success() else 1
+
+
+def cmd_audit_final(exp_path: Path, write: bool) -> int:
+    """Informe final de auditoría AU-04 — combina AU-01 + AU-02 + AU-03."""
+    from eia_agent.core.final_audit_report import (
+        build_final_audit_from_files,
+        write_final_audit_outputs,
+    )
+
+    try:
+        result = build_final_audit_from_files(exp_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en informe final: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_final_audit_outputs(result, auditoria_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    # exit 0 si CONFORME o CONFORME_CON_OBSERVACIONES; exit 1 si NO_CONFORME o INCOMPLETO
+    return 0 if result.status in ("CONFORME", "CONFORME_CON_OBSERVACIONES") else 1
+
+
+def cmd_audit_traceability(exp_path: Path, write: bool) -> int:
+    """Validador de trazabilidad HC <-> DA (AU-03)."""
+    from eia_agent.core.traceability_validator import (
+        validate_traceability_from_files,
+        write_traceability_validation_outputs,
+    )
+
+    try:
+        result = validate_traceability_from_files(exp_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en validador de trazabilidad: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_traceability_validation_outputs(result, auditoria_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_valid() else 1
+
+
+def cmd_audit_prudence(exp_path: Path, write: bool) -> int:
+    """Validador de prudencia metodológica y lenguaje prohibido (AU-02)."""
+    from eia_agent.core.prudence_validator import (
+        validate_prudence_from_files,
+        write_prudence_validation_outputs,
+    )
+
+    try:
+        result = validate_prudence_from_files(exp_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en validador de prudencia: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_prudence_validation_outputs(result, auditoria_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_valid() else 1
+
+
+def cmd_audit_conesa(exp_path: Path, write: bool) -> int:
+    """Checker de cobertura Conesa en impactos y markdowns (RD-06)."""
+    from eia_agent.core.conesa_checker import (
+        validate_conesa_coverage_from_files,
+        write_conesa_check_outputs,
+    )
+
+    try:
+        result = validate_conesa_coverage_from_files(exp_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en checker Conesa: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_conesa_check_outputs(result, auditoria_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_valid() else 1
+
+
+def cmd_audit_block_consistency(exp_path: Path, write: bool) -> int:
+    """Validador de coherencia entre bloques del expediente (RD-04)."""
+    from eia_agent.core.block_consistency_validator import (
+        validate_block_consistency_from_files,
+        write_block_consistency_outputs,
+    )
+
+    try:
+        result = validate_block_consistency_from_files(exp_path)
+    except Exception as exc:
+        print(f"Error en validador de coherencia: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_block_consistency_outputs(result, auditoria_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_valid() else 1
+
+
+def cmd_audit_diagnostic_measures(exp_path: Path, write: bool) -> int:
+    """Validador de medidas diagnosticas vs reductoras de significancia (RD-08)."""
+    from eia_agent.core.diagnostic_measure_validator import (
+        validate_diagnostic_measures_from_files,
+        write_diagnostic_measure_outputs,
+    )
+
+    try:
+        result = validate_diagnostic_measures_from_files(exp_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en validador de medidas diagnosticas: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_diagnostic_measure_outputs(result, auditoria_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_valid() else 1
+
+
+def cmd_document_build_md(exp_path: Path, write: bool) -> int:
+    """Genera el borrador Markdown del Documento Ambiental (DOC-01)."""
+    from eia_agent.core.document_markdown_builder import build_document_markdown
+
+    try:
+        result = build_document_markdown(exp_path, write_outputs=write)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en document-build-md: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if result.warnings:
+        print()
+        for w in result.warnings[:10]:
+            print(f"  [AVISO] {w}")
+
+    if write:
+        doc_dir = exp_path / "documento"
+        print(f"\nOutputs escritos:")
+        print(f"  {doc_dir / 'documento_ambiental_borrador.md'}")
+        print(f"  {doc_dir / 'document_build_result.json'}")
+
+    if result.partial_blocks:
+        print(f"\nBloques PARTIAL: {', '.join(result.partial_blocks)}")
+        print("  (contenido generado con advertencias — revisar fuentes faltantes)")
+
+    return 0 if result.is_complete_draft() else 1
+
+
+def cmd_document_manifest(exp_path: Path, write: bool) -> int:
+    """Manifest del Documento Ambiental: estado por bloque A-K (DOC-00)."""
+    from eia_agent.core.document_manifest import (
+        build_document_manifest,
+        write_document_manifest_outputs,
+    )
+
+    try:
+        result = build_document_manifest(exp_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en manifest del documento: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        doc_dir = exp_path / "documento"
+        json_path, md_path = write_document_manifest_outputs(result, doc_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_ready_for_markdown_generation() else 1
+
+
+def cmd_audit_prl_measures(exp_path: Path, write: bool) -> int:
+    """Validador de separacion EIA / PRL (RD-09)."""
+    from eia_agent.core.prl_measure_validator import (
+        validate_prl_measures_from_files,
+        validate_prl_measures_markdowns_from_files,
+        write_prl_measure_outputs,
+        _combine_results,
+    )
+
+    try:
+        model_result = validate_prl_measures_from_files(exp_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en validador PRL (modelo): {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        md_result = validate_prl_measures_markdowns_from_files(exp_path)
+    except FileNotFoundError:
+        md_result = None
+    except Exception as exc:
+        print(f"Aviso validador PRL (markdown): {exc}", file=sys.stderr)
+        md_result = None
+
+    result = _combine_results(model_result, md_result) if md_result is not None else model_result
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_prl_measure_outputs(result, auditoria_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_valid() else 1
+
+
+def cmd_assumptions_summary(exp_path: Path, write: bool) -> int:
+    """Muestra el resumen de asunciones de test del expediente (OB-05)."""
+    from eia_agent.core.assumption_test_system import (
+        build_assumptions_markdown,
+        load_assumptions_registry,
+    )
+
+    at_json = exp_path / "control_interno" / "asunciones_test.json"
+
+    try:
+        registry = load_assumptions_registry(at_json)
+    except ValueError as exc:
+        print(f"Error: JSON corrupto en {at_json}: {exc}", file=sys.stderr)
+        return 1
+
+    if not registry.assumptions:
+        print("Sin asunciones registradas.")
+        if not at_json.exists():
+            print(f"(archivo {at_json.name} no existe en control_interno/)")
+        return 0
+
+    print(registry.summary())
+
+    if write:
+        out_dir = exp_path / "control_interno"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        md_content = build_assumptions_markdown(registry)
+        md_path = out_dir / "asunciones_test_resumen.md"
+        md_path.write_text(md_content, encoding="utf-8")
+        print(f"\nOutput escrito:")
+        print(f"  {md_path}")
+
+    return 0
+
+
+def cmd_audit_art45(exp_path: Path, write: bool) -> int:
+    """Checklist programático del art. 45.1 Ley 21/2013 (AU-01)."""
+    from eia_agent.core.art45_checklist import (
+        evaluate_art45_checklist_from_files,
+        write_art45_checklist_outputs,
+    )
+
+    try:
+        result = evaluate_art45_checklist_from_files(exp_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en checklist art.45: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_art45_checklist_outputs(result, auditoria_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_structurally_complete() else 1
+
+
+def cmd_inventory_gate(exp_path: Path, write: bool, prod: bool) -> int:
+    """Evalúa el gate de cierre de Fase 5 sobre el inventario construido (F5-01)."""
+    from eia_agent.core.phase5_gate import (
+        evaluate_phase5_gate_from_inventory_json,
+        write_phase5_gate_outputs,
+    )
+    inventory_path = exp_path / "inventario" / "inventory_summary.json"
+    if not inventory_path.exists():
+        print(
+            f"Error: no se encontró {inventory_path}.\n"
+            "Ejecute primero: inventory-build --write",
+            file=sys.stderr,
+        )
+        return 1
+
+    test_mode = not prod
+    try:
+        result = evaluate_phase5_gate_from_inventory_json(inventory_path, test_mode=test_mode)
+        print(result.summary())
+        if write:
+            out_dir = exp_path / "inventario"
+            json_path, md_path = write_phase5_gate_outputs(result, out_dir)
+            print(f"\nOutputs escritos:")
+            print(f"  {json_path}")
+            print(f"  {md_path}")
+        return 0 if not result.is_blocked() else 1
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except ValueError as exc:
+        print(f"Error de datos: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en inventory-gate: {exc}", file=sys.stderr)
+        return 1
+
+
+def cmd_phase1(exp_path: Path, write: bool) -> int:
+    """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
+    from eia_agent.core.phase1_pipeline import run_phase1
+    try:
+        result = run_phase1(exp_path, write_outputs=write)
+        print(result.summary())
+        if write:
+            out_dir = exp_path / "control_interno"
+            print(f"\nOutputs escritos en: {out_dir}")
+        return 0
+    except Exception as exc:
+        print(f"Error en Fase 1: {exc}", file=sys.stderr)
+        return 1
+
+
+# ---------------------------------------------------------------------------
+# Parser
+# ---------------------------------------------------------------------------
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(
+        prog="run_expediente.py",
+        description="EIA-Agent v2.1 — Runner básico (CLI-01). No ejecuta agentes reales.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Ejemplos:
+  python run_expediente.py expediente-EIA-NAVE-222 status
+  python run_expediente.py expediente-EIA-NAVE-222 validate
+  python run_expediente.py expediente-EIA-NAVE-222 gate 4
+  python run_expediente.py expediente-EIA-NAVE-222 gate 4 --prod
+  python run_expediente.py expediente-EIA-NAVE-222 recover
+  python run_expediente.py expediente-EIA-NAVE-222 recover --write-report
+  python run_expediente.py expediente-EIA-NAVE-222 log-summary
+  python run_expediente.py expediente-EIA-NAVE-222 phase1
+  python run_expediente.py expediente-EIA-NAVE-222 phase1 --write
+  python run_expediente.py expediente-EIA-NAVE-222 phase2
+  python run_expediente.py expediente-EIA-NAVE-222 phase2 --write
+  python run_expediente.py expediente-EIA-NAVE-222 phase2 --prod
+  python run_expediente.py expediente-EIA-NAVE-222 phase3
+  python run_expediente.py expediente-EIA-NAVE-222 phase3 --write
+  python run_expediente.py expediente-EIA-NAVE-222 phase4-precheck
+  python run_expediente.py expediente-EIA-NAVE-222 phase4-precheck --write
+  python run_expediente.py expediente-EIA-NAVE-222 phase4-climate --stations config/estaciones.json --climate-data config/datos_climaticos.json
+  python run_expediente.py expediente-EIA-NAVE-222 phase4-climate --stations config/estaciones.json --climate-data config/datos_climaticos.json --write
+  python run_expediente.py expediente-EIA-NAVE-222 phase4-offline --stations config/estaciones.json --climate-data config/datos_climaticos.json
+  python run_expediente.py expediente-EIA-NAVE-222 phase4-offline --stations config/estaciones.json --climate-data config/datos_climaticos.json --write
+  python run_expediente.py expediente-EIA-NAVE-222 inventory-build
+  python run_expediente.py expediente-EIA-NAVE-222 inventory-build --write
+  python run_expediente.py expediente-EIA-NAVE-222 inventory-gate
+  python run_expediente.py expediente-EIA-NAVE-222 inventory-gate --write
+  python run_expediente.py expediente-EIA-NAVE-222 inventory-gate --prod
+  python run_expediente.py expediente-EIA-NAVE-222 phase6-actions
+  python run_expediente.py expediente-EIA-NAVE-222 phase6-actions --write
+  python run_expediente.py expediente-EIA-NAVE-222 phase6-identify-impacts
+  python run_expediente.py expediente-EIA-NAVE-222 phase6-identify-impacts --write
+  python run_expediente.py expediente-EIA-NAVE-222 phase6-assign-conesa
+  python run_expediente.py expediente-EIA-NAVE-222 phase6-assign-conesa --write
+  python run_expediente.py expediente-EIA-NAVE-222 phase6-assign-conesa --write --no-score
+        """,
+    )
+    parser.add_argument("expediente", help="Ruta al directorio del expediente EIA")
+
+    sub = parser.add_subparsers(dest="command", required=True, metavar="COMANDO")
+
+    sub.add_parser(
+        "status",
+        help="Estado actual del orquestador (sin modificar el expediente)",
+    )
+    sub.add_parser(
+        "validate",
+        help="Validar los schemas JSON de las capas del expediente",
+    )
+
+    gate_p = sub.add_parser(
+        "gate",
+        help="Evaluar el gate mínimo de una fase",
+    )
+    gate_p.add_argument("phase", metavar="FASE", help="Número de fase (1-9)")
+    gate_p.add_argument(
+        "--prod",
+        action="store_true",
+        help="Modo producción: AT/PROVISIONAL/INDETERMINADO son ERROR en lugar de WARNING",
+    )
+
+    recover_p = sub.add_parser(
+        "recover",
+        help="Diagnosticar sesiones interrumpidas o inconsistentes",
+    )
+    recover_p.add_argument(
+        "--write-report",
+        action="store_true",
+        dest="write_report",
+        help="Escribir control_interno/recovery_report.json (por defecto no escribe nada)",
+    )
+
+    sub.add_parser(
+        "log-summary",
+        help="Resumen del log del orquestador (solo lectura)",
+    )
+
+    phase1_p = sub.add_parser(
+        "phase1",
+        help="Pipeline de Fase 1: indexar documentos y extraer hechos candidatos (IN-06)",
+    )
+    phase1_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir phase1_result.json y phase1_result.md en control_interno/",
+    )
+
+    phase2_p = sub.add_parser(
+        "phase2",
+        help="Pipeline de Fase 2: construir ObjectScope y evaluar Gate 2 (OB-06)",
+    )
+    phase2_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir phase2_result.json, ficha_objeto_evaluado.md y object_scope.json",
+    )
+    phase2_p.add_argument(
+        "--prod",
+        action="store_true",
+        help="Modo producción: AT activos y gaps ALTA son ERROR en lugar de WARNING",
+    )
+
+    phase3_p = sub.add_parser(
+        "phase3",
+        help="Pipeline de Fase 3: triaje normativo básico (TN-05)",
+    )
+    phase3_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir phase3_result.json y nota_encuadre_legal.md en control_interno/",
+    )
+
+    phase4pre_p = sub.add_parser(
+        "phase4-precheck",
+        help="Precheck de Fase 4: evaluar preparacion para cartografia y clima (CA-08)",
+    )
+    phase4pre_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir phase4_precheck.json y phase4_precheck.md en control_interno/",
+    )
+
+    phase4cl_p = sub.add_parser(
+        "phase4-climate",
+        help="Pipeline climático Fase 4 offline: selección estación, Köppen, climograma (CL-06)",
+    )
+    phase4cl_p.add_argument(
+        "--stations",
+        required=True,
+        metavar="STATIONS_JSON",
+        help="Ruta al JSON local de estaciones climáticas",
+    )
+    phase4cl_p.add_argument(
+        "--climate-data",
+        required=True,
+        dest="climate_data",
+        metavar="CLIMATE_DATA_JSON",
+        help="Ruta al JSON local de datos climáticos mensuales",
+    )
+    phase4cl_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir phase4_climate_result.json, descripcion_clima.md y climograma PNG en clima/",
+    )
+
+    phase4off_p = sub.add_parser(
+        "phase4-offline",
+        help="Pipeline Fase 4 offline completo: CA-08 + CL-06 + CA-10 + CA-11 (F4-01)",
+    )
+    phase4off_p.add_argument(
+        "--stations",
+        required=True,
+        metavar="STATIONS_JSON",
+        help="Ruta al JSON local de estaciones climáticas",
+    )
+    phase4off_p.add_argument(
+        "--climate-data",
+        required=True,
+        dest="climate_data",
+        metavar="CLIMATE_DATA_JSON",
+        help="Ruta al JSON local de datos climáticos mensuales",
+    )
+    phase4off_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir todos los outputs (fase4/, clima/, cartografia/)",
+    )
+
+    cart_p = sub.add_parser(
+        "cartography-plan",
+        help="Plan cartográfico offline Fase 4: 6 MapSpec sin renderizado (CA-10)",
+    )
+    cart_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir cartografia_plan.json y cartografia_plan.md en cartografia/",
+    )
+
+    smap_p = sub.add_parser(
+        "schematic-maps",
+        help="Generar mapas esquemáticos PNG provisionales desde un plan CA-10 (CA-11)",
+    )
+    smap_p.add_argument(
+        "--plan",
+        default=None,
+        metavar="PLAN_JSON",
+        help="Ruta al cartografia_plan.json (por defecto: cartografia/cartografia_plan.json)",
+    )
+    smap_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Generar los PNGs en cartografia/mapas/ (sin --write solo muestra la lista)",
+    )
+
+    p6act_p = sub.add_parser(
+        "phase6-actions",
+        help="Construir acciones del proyecto desde phase2_result.json para Fase 6 (IM-02)",
+    )
+    p6act_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir phase6_actions.json y phase6_model_base.json en impactos/",
+    )
+
+    p6imp_p = sub.add_parser(
+        "phase6-identify-impacts",
+        help="Identificar impactos preliminares accion x receptor para Fase 6 (IM-03)",
+    )
+    p6imp_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir impact_identification_result.json y "
+            "phase6_model_with_impacts.json en impactos/"
+        ),
+    )
+
+    p6conesa_p = sub.add_parser(
+        "phase6-assign-conesa",
+        help="Asignar atributos Conesa tipologicos a impactos identificados (IM-04)",
+    )
+    p6conesa_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir phase6_model_with_conesa.json y "
+            "conesa_assignment_result.json en impactos/"
+        ),
+    )
+    p6conesa_p.add_argument(
+        "--no-score",
+        action="store_true",
+        dest="no_score",
+        help="No aplicar valoración Conesa (IM-01) tras la asignación de atributos",
+    )
+
+    p6meas_p = sub.add_parser(
+        "phase6-generate-measures",
+        help="Generar medidas ambientales por tipo de impacto (IM-05)",
+    )
+    p6meas_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir phase6_model_with_measures.json y "
+            "measure_generation_result.json en impactos/"
+        ),
+    )
+
+    p6pva_p = sub.add_parser(
+        "phase6-generate-pva",
+        help="Generar fichas del Programa de Vigilancia Ambiental (IM-06)",
+    )
+    p6pva_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir phase6_model_with_pva.json y "
+            "pva_generation_result.json en impactos/"
+        ),
+    )
+
+    p6cum_p = sub.add_parser(
+        "phase6-cumulative",
+        help="Generar seccion C.5 efectos acumulativos y sinergicos (IM-08)",
+    )
+    p6cum_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir cumulative_synergistic_result.json y "
+            "C5_acumulativos_sinergicos.md en impactos/"
+        ),
+    )
+
+    p6vpva_p = sub.add_parser(
+        "phase6-validate-pva",
+        help="Validar cobertura PVA de impactos relevantes (IM-07)",
+    )
+    p6vpva_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir pva_coverage_result.json y "
+            "pva_coverage_result.md en impactos/"
+        ),
+    )
+
+    inv_p = sub.add_parser(
+        "inventory-build",
+        help="Construir inventario ambiental inicial Fase 5 desde outputs Fase 4 (IV-02)",
+    )
+    inv_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir fichas markdown, resumen e índice JSON en inventario/",
+    )
+
+    invgate_p = sub.add_parser(
+        "inventory-gate",
+        help="Evaluar gate de cierre de Fase 5 sobre inventario construido (F5-01)",
+    )
+    invgate_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir phase5_gate_result.json y .md en inventario/",
+    )
+    invgate_p.add_argument(
+        "--prod",
+        action="store_true",
+        help="Modo producción (test_mode=False); por defecto test_mode=True",
+    )
+
+    au01_p = sub.add_parser(
+        "audit-art45",
+        help="Checklist art. 45.1 Ley 21/2013 — EIA simplificada (AU-01)",
+    )
+    au01_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir art45_checklist_result.json y "
+            "art45_checklist_result.md en auditoria/"
+        ),
+    )
+
+    au02_p = sub.add_parser(
+        "audit-prudence",
+        help="Validador de prudencia metodológica y lenguaje prohibido (AU-02)",
+    )
+    au02_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir prudence_validation_result.json y "
+            "prudence_validation_result.md en auditoria/"
+        ),
+    )
+
+    pipe01_p = sub.add_parser(
+        "run-technical-pipeline",
+        help="Pipeline tecnico automatico F5->AU-04 en un solo comando (PIPE-01)",
+    )
+    pipe01_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir todos los outputs de cada paso en sus rutas normales",
+    )
+    pipe01_p.add_argument(
+        "--prod",
+        action="store_true",
+        help="Modo produccion (mode=PROD). No cambia administrative_ready.",
+    )
+    pipe01_p.add_argument(
+        "--continue-on-error",
+        dest="continue_on_error",
+        action="store_true",
+        help="Continuar con pasos siguientes aunque un paso falle",
+    )
+
+    au04_p = sub.add_parser(
+        "audit-final",
+        help="Informe final de auditoría: combina AU-01 + AU-02 + AU-03 (AU-04)",
+    )
+    au04_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir final_audit_result.json y "
+            "final_audit_result.md en auditoria/"
+        ),
+    )
+
+    au03_p = sub.add_parser(
+        "audit-traceability",
+        help="Validador de trazabilidad HC <-> DA — referencias en textos del expediente (AU-03)",
+    )
+    au03_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir traceability_validation_result.json y "
+            "traceability_validation_result.md en auditoria/"
+        ),
+    )
+
+    at_p = sub.add_parser(
+        "assumptions-summary",
+        help="Resumen de asunciones de test activas del expediente (OB-05)",
+    )
+    at_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir asunciones_test_resumen.md en control_interno/",
+    )
+
+    rd06_p = sub.add_parser(
+        "audit-conesa",
+        help="Checker de cobertura Conesa en impactos y markdowns (RD-06)",
+    )
+    rd06_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir conesa_check_result.json y .md en auditoria/",
+    )
+
+    rd04_p = sub.add_parser(
+        "audit-block-consistency",
+        help="Validador de coherencia entre bloques del expediente (RD-04)",
+    )
+    rd04_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir block_consistency_result.json y .md en auditoria/",
+    )
+
+    rd08_p = sub.add_parser(
+        "audit-diagnostic-measures",
+        help="Validador de medidas diagnosticas vs reductoras de significancia (RD-08)",
+    )
+    rd08_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir diagnostic_measure_validation_result.json y .md en auditoria/",
+    )
+
+    rd09_p = sub.add_parser(
+        "audit-prl-measures",
+        help="Validador de separacion medidas EIA / PRL (RD-09)",
+    )
+    rd09_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir prl_measure_validation_result.json y .md en auditoria/",
+    )
+
+    doc00_p = sub.add_parser(
+        "document-manifest",
+        help="Manifest del Documento Ambiental: estado por bloque A-K (DOC-00)",
+    )
+    doc00_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir document_manifest.json y .md en documento/",
+    )
+
+    doc01_p = sub.add_parser(
+        "document-build-md",
+        help=(
+            "Generar borrador Markdown del Documento Ambiental a partir de "
+            "outputs tecnicos (DOC-01)"
+        ),
+    )
+    doc01_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir documento/documento_ambiental_borrador.md y "
+            "documento/document_build_result.json"
+        ),
+    )
+
+    return parser
+
+
+# ---------------------------------------------------------------------------
+# Punto de entrada
+# ---------------------------------------------------------------------------
+
+def main(argv=None) -> int:
+    """Punto de entrada. Devuelve el código de salida (0=OK, 1=error/bloqueado)."""
+    parser = build_parser()
+    args = parser.parse_args(argv)
+
+    exp_path = Path(args.expediente).resolve()
+    if not exp_path.exists():
+        print(f"Error: el expediente '{args.expediente}' no existe.", file=sys.stderr)
+        return 1
+    if not exp_path.is_dir():
+        print(f"Error: '{args.expediente}' no es un directorio.", file=sys.stderr)
+        return 1
+
+    if args.command == "status":
+        return cmd_status(exp_path)
+    if args.command == "validate":
+        return cmd_validate(exp_path)
+    if args.command == "gate":
+        return cmd_gate(exp_path, args.phase, args.prod)
+    if args.command == "recover":
+        return cmd_recover(exp_path, args.write_report)
+    if args.command == "log-summary":
+        return cmd_log_summary(exp_path)
+    if args.command == "phase1":
+        return cmd_phase1(exp_path, args.write)
+    if args.command == "phase2":
+        return cmd_phase2(exp_path, args.write, args.prod)
+    if args.command == "phase3":
+        return cmd_phase3(exp_path, args.write)
+    if args.command == "phase4-precheck":
+        return cmd_phase4_precheck(exp_path, args.write)
+    if args.command == "phase4-climate":
+        return cmd_phase4_climate(exp_path, args.stations, args.climate_data, args.write)
+    if args.command == "phase4-offline":
+        return cmd_phase4_offline(exp_path, args.stations, args.climate_data, args.write)
+    if args.command == "cartography-plan":
+        return cmd_cartography_plan(exp_path, args.write)
+    if args.command == "schematic-maps":
+        return cmd_schematic_maps(exp_path, args.plan, args.write)
+    if args.command == "phase6-actions":
+        return cmd_phase6_actions(exp_path, args.write)
+    if args.command == "phase6-identify-impacts":
+        return cmd_phase6_identify_impacts(exp_path, args.write)
+    if args.command == "phase6-assign-conesa":
+        return cmd_phase6_assign_conesa(exp_path, args.write, args.no_score)
+    if args.command == "phase6-generate-measures":
+        return cmd_phase6_generate_measures(exp_path, args.write)
+    if args.command == "phase6-generate-pva":
+        return cmd_phase6_generate_pva(exp_path, args.write)
+    if args.command == "phase6-cumulative":
+        return cmd_phase6_cumulative(exp_path, args.write)
+    if args.command == "phase6-validate-pva":
+        return cmd_phase6_validate_pva(exp_path, args.write)
+    if args.command == "inventory-build":
+        return cmd_inventory_build(exp_path, args.write)
+    if args.command == "inventory-gate":
+        return cmd_inventory_gate(exp_path, args.write, args.prod)
+    if args.command == "audit-art45":
+        return cmd_audit_art45(exp_path, args.write)
+    if args.command == "audit-prudence":
+        return cmd_audit_prudence(exp_path, args.write)
+    if args.command == "audit-traceability":
+        return cmd_audit_traceability(exp_path, args.write)
+    if args.command == "audit-final":
+        return cmd_audit_final(exp_path, args.write)
+    if args.command == "run-technical-pipeline":
+        return cmd_run_technical_pipeline(
+            exp_path, args.write, args.prod, args.continue_on_error
+        )
+    if args.command == "assumptions-summary":
+        return cmd_assumptions_summary(exp_path, args.write)
+    if args.command == "audit-conesa":
+        return cmd_audit_conesa(exp_path, args.write)
+    if args.command == "audit-block-consistency":
+        return cmd_audit_block_consistency(exp_path, args.write)
+    if args.command == "audit-diagnostic-measures":
+        return cmd_audit_diagnostic_measures(exp_path, args.write)
+    if args.command == "audit-prl-measures":
+        return cmd_audit_prl_measures(exp_path, args.write)
+    if args.command == "document-manifest":
+        return cmd_document_manifest(exp_path, args.write)
+    if args.command == "document-build-md":
+        return cmd_document_build_md(exp_path, args.write)
+
+    # No debería llegar aquí (argparse lo impide con required=True)
+    parser.print_help()
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

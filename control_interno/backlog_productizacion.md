@@ -1,0 +1,281 @@
+# BACKLOG DE PRODUCTIZACIÓN — EIA-Agent v2.1
+## Actualizado tras segundo piloto validado EIA-2026-RECIMETAL-NAVE-222
+
+**Fecha de extracción**: 2026-04-13  
+**Última actualización**: 2026-04-19 — normalización de IDs pre-P1 código (ver `matriz_maestra_items_productizacion.md`)  
+**Baseline**: Piloto 1 (PARCELA — CON OBSERVACIONES) + Piloto 2 (NAVE-222 — CONFORME EN MODO TEST)  
+**Método de priorización**: MoSCoW + secuencia técnica de dependencias
+
+> **AVISO POST-NORMALIZACIÓN**: Este archivo es la fuente de referencia. Los IDs son canónicos.  
+> Conflictos resueltos en `matriz_maestra_items_productizacion.md`. Los ítems INST-01 y CLI-01 son nuevos (añadidos en normalización 2026-04-19). Los ítems de Área 14 tienen estado dual: prompt ✅ HECHO / código ❌ PENDIENTE.  
+
+---
+
+## LEYENDA
+
+| Campo | Valores |
+|-------|---------|
+| Prioridad | P1 (Must Have) · P2 (Should Have) · P3 (Nice to Have) |
+| Esfuerzo | S (≤1 día) · M (2-5 días) · L (1-3 semanas) · XL (>3 semanas) |
+| Estado baseline | ✅ Validado · ⚠️ Parcial · ❌ No existe |
+| Tipo | núcleo · api · herramienta · config · infra · ux |
+
+---
+
+## ÁREA 0 — INFRAESTRUCTURA BASE (setup + CLI básico)
+
+> Ítems INST-01 y CLI-01 añadidos en normalización 2026-04-19. Faltaban en backlog original a pesar de estar en los deliverables P1 del roadmap.
+> ASSETS-01 y SOURCES-01 añadidos 2026-04-26 como hito de organización de recursos.
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| INST-01 | Instalador multiplataforma: script `setup.py` que crea virtualenv, instala requirements.txt, verifica Python ≥3.11, gestiona AEMET API key y estructura de carpetas. macOS + Windows + Linux | P1 | S | — | ✅ **COMPLETADO 2026-04-20** — `scripts/setup_env.py` + `install.bat` + `install.sh` + `requirements.txt` + `.env.example` + `docs/INSTALACION_LOCAL.md`. Probado en Windows (Python 3.13, venv OK, 9 paquetes instalados) | **NUEVO** — faltaba en backlog. Primer ítem a escribir antes de cualquier código |
+| CLI-01 | Runner básico: `run_expediente.py [ID] [--fase N] [--from-checkpoint]` que instancia EIAOrchestrator y lanza la fase indicada con gate-check previo | P1 | S | NL-03, NL-07 | ✅ **COMPLETADO 2026-04-21** — `run_expediente.py` en raíz: comandos `status`, `validate`, `gate <fase> [--prod]`, `recover [--write-report]`, `log-summary`. `main(argv) -> int`. 43 tests OK en `tests/test_cli_runner.py`. Solo lectura salvo `recover --write-report`. No ejecuta agentes reales. | `docs/CLI_RUNNER.md` |
+| ASSETS-01 | Recursos de marca: carpeta `assets/brand/`, ruta del logo EcoGestión, documentación de colores y usos. Sin código Python. | P1 | S | — | ✅ **COMPLETADO 2026-04-26** — `assets/brand/PLACEHOLDER.md` + `docs/BRAND_ASSETS.md`. Logo pendiente de colocar en `assets/brand/logo_ecogestion.png` (no encontrado en filesystem; documentado como PENDIENTE). Sin claves reales. | **NUEVO** — hito organizativo |
+| SOURCES-01 | Catálogo de fuentes EIA: `config/reference_sources/eia_sources_catalog.json` con 30 fuentes estructuradas (clima, cartografía, catastro, inundabilidad, ENP/Natura 2000, calidad aire, ruido, geología, SIGPAC, Canarias/Grafcan, Andalucía/REDIAM). Estado REFERENCIA_MANUAL. Sin verificación online. | P1 | S | — | ✅ **COMPLETADO 2026-04-26** — `config/reference_sources/eia_sources_catalog.json` (30 entradas SRC-001…SRC-030) + `docs/EIA_SOURCES_CATALOG.md`. Extraídas del documento aportado. Sin URLs inventadas. Sin claves. | **NUEVO** — hito organizativo |
+
+---
+
+## ÁREA 1 — NÚCLEO LÓGICO (orquestador + modelo de datos)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| NL-01 | Formalizar JSON Schema v2.1 para las 6 capas (hechos, inferencias, normativa, trazabilidad, cartografía, salidas) | P1 | M | — | ✅ **COMPLETADO 2026-04-20** — 7 schemas en `config/schemas/v2_1/`, 27 tests OK (pilotos PARCELA y NAVE-222 validan sin errores) | `docs/SCHEMAS_V21.md` |
+| NL-02 | Implementar validador de schemas (JSON Schema Draft 7) ejecutable antes de cada gate | P1 | M | NL-01 | ✅ **COMPLETADO 2026-04-20** — `src/eia_agent/core/schema_validator.py`: `validate_expediente()`, `validate_layer()`, `ValidationResult`, `ValidationIssue`. 33 tests OK. | `docs/SCHEMA_VALIDATOR.md` |
+| NL-03 | Orquestador de fases: clase `EIAOrchestrator` que conoce el grafo de dependencias y evalúa gates | P1 | L | NL-01, NL-02 | ✅ **COMPLETADO 2026-04-21** — `src/eia_agent/core/orchestrator.py`: `EIAOrchestrator`, `Phase`, `PhaseStatus`, `OrchestratorState`, `PhaseStatusValue`, `OrchestratorError`. 67 tests OK en `tests/test_orchestrator.py` (16 criterios de cierre verificados). Sin correcciones necesarias en el código. | El piloto lo hacía manualmente; la productización requiere código |
+| NL-04 | Implementar gate-checker automático: evalúa si los campos requeridos de cada gate están en estado CONFIRMADO o DECLARADO | P1 | M | NL-02, NL-03 | ✅ **COMPLETADO 2026-04-21** — `src/eia_agent/core/gate_checker.py`: `GateChecker`, `GateIssue`, `GateResult`. 82 tests OK en `tests/test_gate_checker.py`. test_mode/producción. Soporta NAVE-222 y PARCELA (aliases de archivos). Sin modificación del expediente. | `docs/GATE_CHECKER.md` |
+| NL-05 | Sistema de estados de evidencia: clase `EvidenceState` con validación de transiciones permitidas | P1 | S | — | ✅ **COMPLETADO 2026-04-19** — `src/eia_agent/core/evidence_state.py` (15 estados, 8 métodos, 58 tests OK) | `docs/EVIDENCE_STATE.md` |
+| NL-06 | Log de orquestador estructurado: checkpoint por fase en JSON (no solo markdown) | P1 | S | NL-03 | ✅ **COMPLETADO 2026-04-20** — `src/eia_agent/core/orchestrator_log.py`: `OrchestratorLog`, `OrchestratorEvent`, `EventType`, `EventStatus`. 44 tests OK. Auto-crea `control_interno/`. Persiste a `orchestrator_log.json`. | `docs/ORCHESTRATOR_LOG.md` |
+| NL-07 | Recuperación de sesión: capacidad de leer el checkpoint y retomar desde la fase interrumpida | P1 | M | NL-06 | ✅ **COMPLETADO 2026-04-21** — `src/eia_agent/core/session_recovery.py`: `SessionRecovery`, `RecoveryIssue`, `RecoveryReport`. 94 tests OK. Detecta IN_PROGRESS, BLOCKED, log corrupto, discrepancias estado/log. Solo lectura. `write_recovery_report()` genera `control_interno/recovery_report.json`. | `docs/SESSION_RECOVERY.md` |
+| NL-08 | Soporte multi-tipo de proyecto: config tipológica separada del núcleo (residuos, cantera, industria, urbanismo) | P2 | L | NL-03 | ❌ No existe | El piloto cubre solo R12/R13 polígono industrial |
+| NL-09 | Soporte multi-jurisdicción: config por CCAA (Canarias, Andalucía, Resto España) | P2 | L | NL-03 | ⚠️ Canarias implícito en el piloto | Lección L-09 del postmortem |
+| NL-10 | Sistema de solicitud de datos al promotor: flujo priorizado por criticidad de gap | P2 | M | NL-04 | ❌ No existe | Lección L-10: el sistema no puede inferirlo todo |
+
+---
+
+## ÁREA 2 — AGENTES DE INGESTA (AG-1, AG-2, AG-3)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| IN-01 | Parser DOCX: extraer texto plano, tablas y metadatos de archivos .docx del promotor | P1 | M | — | ✅ **COMPLETADO 2026-04-21** — `src/eia_agent/core/docx_parser.py`: `parse_docx()`, `extract_tables_raw()`, `DocxContent`. 55 tests OK. Solo lectura. Fixture real: PARCELA (56 708 chars, 18 tablas, 23 páginas). | `docs/DOCX_PARSER.md` |
+| IN-02 | Extractor de entidades: tabla LER, referencias catastrales, coordenadas, operaciones R/D | P1 | M | IN-01 | ✅ **COMPLETADO 2026-04-21** — `src/eia_agent/core/entity_extractor.py`: `extract_entities_from_text()`, `extract_entities_from_docx()`, `ExtractedEntity`, `ExtractionResult`. 10 tipos de entidad. Regex puro, sin IA. Fix regex LER compact (`\b` → `(?!\d)`). 105 tests OK. 618 suite OK. | `docs/ENTITY_EXTRACTOR.md` |
+| IN-03 | Clasificador de evidencias: asignar estado inicial (DECLARADO/PENDIENTE) a cada entidad extraída | P1 | S | IN-02 | ✅ **COMPLETADO 2026-04-22** — `src/eia_agent/core/evidence_classifier.py`: `classify_entities()`, `classify_entities_from_docx()`, `CandidateFact`, `ClassificationResult`, `detect_simple_conflicts()`. Mapeo 16 entity_types → categoria/campo. DECLARADO por defecto. ASUNCION_TEST con nota. LOW confidence con nota. Detección de conflictos. `to_hechos_confirmados()` genera IDs HC-001... 89 tests OK. 707 suite OK. Fixture PARCELA: RC, LER, promotor RECIMETAL. | `docs/EVIDENCE_CLASSIFIER.md` |
+| IN-04 | Parser PDF: extracción de texto estructurado de PDFs del promotor | P2 | L | — | ⚠️ Catalogado pero no procesado en piloto | Requiere OCR para PDFs escaneados |
+| IN-05 | Índice de documentos de entrada: `inputs_index.json` con metadatos, estado de proceso y cobertura | P1 | S | IN-01, IN-02 | ✅ **COMPLETADO 2026-04-22** — `src/eia_agent/core/input_indexer.py`: `build_inputs_index()`, `write_inputs_index()`, `load_inputs_index()`, `InputDocument`, `InputsIndex`. Ignora temporales. Parseo DOCX via IN-01+IN-02+IN-03 si parse_docx=True. 4 status (PROCESADO/ERROR/PENDIENTE_PARSER_PDF/REGISTRADO_SIN_PARSER). No escribe automáticamente. 86 tests OK. 793 suite OK. Fixture PARCELA (DOCX procesados) y NAVE-222 (PDFs pendientes). | `docs/INPUT_INDEXER.md` |
+
+---
+
+## ÁREA 3 — CIERRE DEL OBJETO (AG-4)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| OB-01 | Generador de `ficha_objeto_evaluado.md`: structured output con todos los campos obligatorios del gate | P1 | M | IN-02, IN-03 | ✅ **COMPLETADO 2026-04-22** — `src/eia_agent/core/object_scope_builder.py`: `build_object_scope()`, `ObjectScope`, `write_object_scope_markdown()`, `write_object_scope_json()`, `load_object_scope_json()`. Ficha 10 secciones. `estado_gate2` APTO/PENDIENTE/BLOQUEADO. Strip prefijos DEC/UTM en coordenadas. 70 tests OK. 863 suite OK. Fixture PARCELA sin escritura en piloto. | `docs/OBJECT_SCOPE_BUILDER.md` |
+| OB-02 | Validador de gate 2: comprueba coordenadas, RC, operaciones incluidas/excluidas, modo declarado | P1 | M | NL-04, OB-01 | ✅ **COMPLETADO 2026-04-23** — `src/eia_agent/core/object_gate_validator.py`: `evaluate_gate_2()`, `evaluate_gate_2_from_json()`, `ObjectGateResult`, `ObjectGateIssue`, `looks_like_referencia_catastral()`, `contains_high_or_critical_gap()`. 10 reglas de validación. test_mode vs producción. 79 tests OK. 942 suite OK. Fixture PARCELA solo lectura. | `docs/OBJECT_GATE_VALIDATOR.md` |
+| OB-03 | Resolución interactiva de contradicciones: detect + ask cuando hay CONT-XXX abiertos | P1 | M | OB-01 | ⚠️ Manual en piloto (CONT-001 resuelto) | |
+| OB-06 | Pipeline Fase 2: `run_phase2()` que integra OB-01+OB-02 desde `phase1_result.json`. Sin IA, sin AT automáticas, sin resolución de contradicciones. CLI `phase2 [--write] [--prod]`. | P1 | S | IN-06, OB-01, OB-02 | ✅ **COMPLETADO 2026-04-25** — `src/eia_agent/core/phase2_pipeline.py`: `run_phase2()`, `Phase2Result`, `build_classification_result_from_phase1()`. 66 tests OK. CLI `phase2 [--write] [--prod]`. | **NUEVO** — ítem integración; no en backlog original |
+
+---
+
+## ÁREA 4 — TRIAJE NORMATIVO (AG-5)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| TN-01 | Módulo de consulta normativa online: BOE/BOC scraping o API para verificar vigencia | P1 | L | — | ⚠️ Consulta manual verificada en piloto | Crítico para no trabajar con normativa obsoleta |
+| TN-02 | Base de normativa por tipo de proyecto y CCAA: tabla de normativa mínima a verificar | P1 | M | — | ⚠️ Codificada en CLAUDE.md, no estructurada | Extraer como `config/normativa_base.json` |
+| TN-03 | Generador de `nota_encuadre_legal.md`: structured output con procedimiento, órganos, normativa | P1 | S | TN-01, TN-02 | ✅ Funcional en piloto | Formalizar template |
+| TN-04 | Tabla de órganos competentes por CCAA y tipo de expediente | P2 | M | TN-02 | ⚠️ Canarias codificado | Ampliar a Andalucía y España |
+| TN-05 | Pipeline Fase 3: `run_phase3()` que integra detección normativa desde `phase1_result.json` + `phase2_result.json` (opcional). 8 reglas de detección. `NormativeItem`, `Phase3Result`. Determinación de procedimiento SIMPLIFICADA/ORDINARIA_POSIBLE/NO_DETERMINADO. CLI `phase3 [--write]`. Sin IA, sin BOE online. | P1 | S | IN-06, OB-06 | ✅ **COMPLETADO 2026-04-25** — `src/eia_agent/core/phase3_pipeline.py`: `run_phase3()`, `Phase3Result`, `NormativeItem`. 10 normas detectadas. 7 cautelas activas. CLI `phase3 [--write]`. 115 tests OK. | **NUEVO** — ítem integración; no en backlog original |
+
+---
+
+## ÁREA 5 — CARTOGRAFÍA (AG-6)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| CA-01 | Tabla de servicios WMS con primary + fallback por capa y jurisdicción: `config/wms_services.json` | P1 | M | — | ⚠️ Documentado en piloto, no codificado | Lección L-04; incluir: MITECO, GRAFCAN, Catastro, IGME, IDECanarias, Copernicus |
+| CA-02 | Cliente WMS robusto: petición GetMap con gestión de errores, retry y fallback automático | P1 | M | CA-01 | ⚠️ Funcional pero frágil en piloto | Wrappear en clase con circuit-breaker |
+| CA-03 | Generador de 8 mapas mínimos obligatorios: ubicación, ortofoto, usos del suelo, ENP, Natura 2000, inundabilidad, litología, inventario | P1 | M | CA-01, CA-02 | ✅ Funcional en piloto (MAP-001 a MAP-008) | Parametrizar por bbox/jurisdicción |
+| CA-04 | Trazabilidad cartográfica automática: `cartografia_trace.json` con URL, fecha, escala, CRS por cada mapa | P1 | S | CA-03 | ✅ Funcional en piloto | |
+| CA-05 | Config de jurisdicción Canarias: servicios WMS IDECanarias, GRAFCAN, RIESGOMAP, bbox por isla | P1 | M | CA-01 | ⚠️ Implícito en piloto | Lección L-09; empaquetar como `config/jurisdicciones/canarias.json` |
+| CA-06 | Config de jurisdicción Andalucía: servicios WMS IECA, RedIA, DERA | P3 | M | CA-01 | ❌ No existe | |
+| CA-07 | Semáforo de campo para cartografía: indicar qué mapas requieren levantamiento topográfico vs. solo WMS | P2 | S | CA-03 | ❌ No existe | Relacionado con NL-08 |
+| CA-08 | Precheck Fase 4: `run_phase4_precheck()` que evalúa preparación del expediente para cartografía y clima. Verifica coordenadas, RC, variables de entorno API (AEMET, Mapbox). Sin llamadas a APIs. `Phase4PrecheckResult`, `Phase4PrecheckIssue`. CLI `phase4-precheck [--write]`. | P1 | S | OB-06, TN-05 | ✅ **COMPLETADO 2026-04-25** — `src/eia_agent/core/phase4_precheck.py`: `run_phase4_precheck()`, `Phase4PrecheckResult`, `Phase4PrecheckIssue`. Códigos P4-E001…P4-I001. CLI `phase4-precheck [--write]`. 113 tests OK. | **NUEVO** — ítem integración precheck; no en backlog original |
+| CA-09 | Núcleo geoespacial offline para cartografía: tipos `GeoPoint`, `BoundingBox`, `MapExtent`. Funciones `validate_lat_lon`, `parse_wgs84_coordinate`, `haversine_distance_km`, `bounding_box_around_point`, `build_map_extent`, `extract_geopoint_from_phase2`, `build_standard_map_extents`. Sin mapas, sin Mapbox, sin WMS. | P1 | S | — | ✅ **COMPLETADO 2026-04-27** — `src/eia_agent/core/geospatial_utils.py`: 10 tipos/funciones. 5 extents estándar EIA. 96 tests OK. 1877 suite OK. | **NUEVO** — núcleo geoespacial offline. `docs/GEOSPATIAL_UTILS.md` |
+| CA-10 | Planificador cartográfico offline: `build_cartography_plan()` que genera 6 `MapSpec` (MAP-001…MAP-006) con capas, fuentes y extent para renderizado posterior. `CartographyPlanResult`, `build_cartography_plan_markdown()`. CLI `cartography-plan [--write]`. Sin Mapbox, sin WMS, sin imágenes. | P1 | S | CA-08, CA-09 | ✅ **COMPLETADO 2026-04-27** — `src/eia_agent/core/cartography_plan.py`: `MapSpec`, `CartographyPlanResult`, `build_cartography_plan()`, `build_cartography_plan_markdown()`. READY_FOR_RENDER si DECLARADO/VERIFICADO, PLANNED si ESTIMADO/PROVISIONAL. CLI `cartography-plan [--write]`. Outputs: `cartografia/cartografia_plan.json` + `cartografia/cartografia_plan.md`. 75 tests OK. 1952 suite OK. | **NUEVO** — planificador cartográfico. `docs/CARTOGRAPHY_PLAN.md` |
+| CA-11 | Generador de mapas esquemáticos offline: `generate_schematic_map(map_spec, output_path, config)` que produce PNG provisional con Pillow. `SchematicMapConfig`, `SchematicMapResult`, `generate_schematic_maps_from_plan()`, `validate_png()`, `load_cartography_plan()`, `build_map_generation_report()`. CLI `schematic-maps [--plan] [--write]`. Sello PROVISIONAL. Sin WMS, sin Mapbox, sin datos reales. | P1 | S | CA-10 | ✅ **COMPLETADO 2026-04-27** — `src/eia_agent/core/schematic_map_generator.py`: 2 dataclasses + 5 funciones. PNG 1600×1100px, DPI 150, título, cuadrícula geográfica, marcador, flecha norte, escala, leyenda, marca de agua diagonal. CLI `schematic-maps [--plan] [--write]`. 62 tests OK. 2014 suite OK. | **NUEVO** — generador esquemático offline. `docs/SCHEMATIC_MAP_GENERATOR.md` |
+
+---
+
+## ÁREA 6 — CLIMA (AG-7)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| CL-01 | Cliente AEMET API: autenticado, con gestión de rate-limit y retry | P1 | S | — | ✅ **COMPLETADO 2026-04-26** — `src/eia_agent/core/aemet_client.py`: `AEMETClient`, `AEMETClient.from_env()`, `get_normales_climatologicas()`. 8 excepciones tipadas (AEMETError base + 7 específicas). Patrón dos pasos AEMET. Retry backoff exponencial 1s/2s/4s. 84 tests OK (1 skipped integración). 1442 suite OK. | `docs/AEMET_CLIENT.md` |
+| CL-02 | Selector de estación más próxima: dado un punto, encontrar la estación con normales 1981-2010 más cercana | P1 | S | CL-01 | ✅ **COMPLETADO 2026-04-26** — `src/eia_agent/core/climate_station_selector.py`: `ClimateStation`, `StationSelection`, `haversine_km()`, `find_nearest_station()`, `parse_station_from_aemet_dict()` (DMS+decimal), `load_stations_from_json()`, `select_station_for_object_scope()`. OPTIMA ≤15 km / ACEPTABLE ≤25 km / LEJANA >25 km / NO_DISPONIBLE. 78 tests OK. 1520 suite OK. | `docs/CLIMATE_STATION_SELECTOR.md` |
+| CL-03 | Calculador Köppen-Geiger + índice de Martonne | P1 | S | CL-02 | ✅ **COMPLETADO 2026-04-26** — `src/eia_agent/core/climate_indices.py`: `MonthlyClimateData`, `ClimateClassification`, `martonne_index()`, `classify_martonne()`, `gaussen_dry_months()`, `month_names_es()`, `classify_koppen()` (B/A/C/D/E, hemisferio norte), `classify_climate()`, `parse_monthly_climate_from_aemet_normals()`. 77 tests OK. 1609 suite OK. | `docs/CLIMATE_INDICES.md` |
+| CL-04 | Generador de climograma SVG: curva de temperatura + barras de precipitación | P1 | S | CL-02 | ✅ **COMPLETADO 2026-04-26** — `src/eia_agent/core/climogram_generator.py`: `ClimogramConfig`, `ClimogramResult`, `generate_climogram()`, `generate_climogram_from_dict()`, `validate_png()`, `default_climogram_filename()`. Backend Agg headless. Doble eje Y (barras P izquierda, curva T derecha). Gaussen meses secos. `ValueError` para extensiones no-.png. 53 tests OK. 1662 suite OK. | `docs/CLIMOGRAM_GENERATOR.md` |
+| CL-06 | Pipeline climático Fase 4 offline: integración CL-02+CL-03+CL-04 desde archivos locales. Selección estación, Köppen+Martonne+Gaussen, climograma PNG, JSON+MD de resultado. Sin AEMET. CLI `phase4-climate`. | P1 | S | CL-02, CL-03, CL-04, CA-08 | ✅ **COMPLETADO 2026-04-27** — `src/eia_agent/core/phase4_climate_pipeline.py`: `Phase4ClimateResult`, `run_phase4_climate()`, `load_monthly_climate_dataset()`, `extract_wgs84_from_phase2()`, `build_climate_description_md()`. CLI `phase4-climate --stations --climate-data [--write]`. 63 tests OK. 1781 suite OK. | **NUEVO** — ítem de integración climática. `docs/PHASE4_CLIMATE_PIPELINE.md` |
+| CL-05 | Inserción de climograma en DOCX: conversión SVG→PNG o generación PNG directa | P1 | M | CL-04, EN-01 | ✅ **COMPLETADO 2026-04-26** — `src/eia_agent/core/climogram_docx_inserter.py`: `ClimogramDocxInsertConfig`, `ClimogramDocxInsertResult`, `insert_climogram_in_docx()`, `validate_docx_contains_image()`, `count_docx_images()`, `default_climogram_caption()`. python-docx, sin LibreOffice, sin SVG. 56 tests OK. 1718 suite OK. | `docs/CLIMOGRAM_DOCX_INSERTER.md` |
+| F4-01 | Pipeline integrador Fase 4 offline: CA-08 → CL-06 → CA-10 → CA-11 en cadena. `Phase4OfflineResult`, `build_phase4_offline_markdown()`, `run_phase4_offline()`. `administrative_ready` siempre False. CLI `phase4-offline --stations --climate-data [--write]`. Sin AEMET, sin Mapbox, sin WMS. | P1 | S | CA-08, CL-06, CA-10, CA-11 | ✅ **COMPLETADO 2026-04-27** — `src/eia_agent/core/phase4_offline_pipeline.py`: `Phase4OfflineResult`, `build_phase4_offline_markdown()`, `run_phase4_offline()`. CLI `phase4-offline --stations --climate-data [--write]`. Outputs: `fase4/phase4_result.json` + `fase4/phase4_result.md`. 79 tests OK. 2093 suite OK. | **NUEVO** — pipeline integrador offline. `docs/PHASE4_OFFLINE_PIPELINE.md` |
+
+---
+
+## ÁREA 7 — INVENTARIO AMBIENTAL (AG-8)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| IV-00 | Modelo base de inventario ambiental: tipos `InventoryGap`, `FactorInventory`, `InventorySummary`. 16 factores FI-001…FI-016 con notación cero-padded. `FIELD_MODES`, `INVENTORY_SEMAPHORES`, `GAP_CRITICALITIES`. `classify_semaphore_from_evidence()`. Regla de prudencia + regla de coherencia en `validate()`. `build_empty_factor_inventory()`, `build_all_empty_factors()`, `build_inventory_summary()`. Sin IA, sin web, sin WMS, sin CLI. | P1 | S | NL-05 | ✅ **COMPLETADO 2026-04-29** — `src/eia_agent/core/inventory_model.py`. 139 tests OK. 2232 suite OK (12 skipped). | **NUEVO** — modelo base prerequisito de IV-01 y toda Fase 5. `docs/INVENTORY_MODEL.md` |
+| IV-01 | Generador de fichas de inventario por factor: `render_factor_inventory_markdown()`, `render_inventory_summary_markdown()`, `build_inventory_index()`, `write_inventory_markdown_files()`. 8 secciones por ficha. Detección de lenguaje de impacto (COMPATIBLE/MODERADO/SEVERO/CRÍTICO) con stem matching. `safe_factor_filename()` sin tildes. `InventoryRenderConfig`, `InventoryRenderResult`. Sin IA, sin web, sin CLI. | P1 | M | IV-00 | ✅ **COMPLETADO 2026-04-29** — `src/eia_agent/core/inventory_renderer.py`. 143 tests OK. 2375 suite OK (12 skipped). | `docs/INVENTORY_RENDERER.md` |
+| IV-02 | Constructor de inventario desde Fase 4 offline: `load_json_file()`, `InventoryBuildResult`, `build_climate_factor_from_phase4()`, `build_base_factor()`, `build_inventory_from_phase4_data()`, `build_inventory_from_phase4()`. FI-001 Clima con datos CL-06 (CONFIRMADO/DECLARADO/PENDIENTE). FI-002…FI-016 en base PENDIENTE/NO_CONSTA. CLI `inventory-build [--write]`. Sin IA, sin web, sin WMS. | P1 | M | IV-00, IV-01, F4-01 | ✅ **COMPLETADO 2026-04-29** — `src/eia_agent/core/inventory_builder.py`. 117 tests OK. 2492 suite OK (12 skipped). CLI `inventory-build [--write]` en `run_expediente.py`. Lanzarote fixture: FI-001 VERDE/CONFIRMADO_GABINETE/BWh. | `docs/INVENTORY_BUILDER.md` |
+| IV-03 | Constructor de factores FI-005 Inundabilidad y FI-016 Riesgos naturales desde Fase 4 offline: `build_flood_risk_factor_from_phase4()`, `build_natural_risks_factor_from_phase4()`, `build_risk_inventory_factors_from_phase4()`, `merge_risk_factors_into_summary()`, `RiskInventoryBuildResult`. Semáforo AMARILLO/NO_CONSTA. Gap ALTA siempre. Nunca VERDE. Sin SNCZI, sin WMS, sin IA. Integrado en IV-02 (`inventory-build`). | P1 | S | IV-00, IV-01, F4-01, CA-10 | ✅ **COMPLETADO 2026-04-30** — `src/eia_agent/core/inventory_risk_builder.py`. 99 tests OK. 2591 suite OK (12 skipped). FI-005 ESTIMADO/AMARILLO si MAP-006 en plan; FI-016 ESTIMADO/AMARILLO si coords+plan. GAP-FI-005-001 y GAP-FI-016-001 siempre ALTA. ready=False siempre. | `docs/INVENTORY_RISK_BUILDER.md` |
+| IV-04 | Constructor de factores FI-011 Paisaje y FI-013 Socioeconomía desde Fase 2/Fase 4 offline: `build_landscape_factor_from_phase_data()`, `build_socioeconomic_factor_from_phase_data()`, `build_context_inventory_factors_from_phase_data()`, `merge_context_factors_into_summary()`, `ContextInventoryBuildResult`. FI-011 ESTIMADO/AMARILLO si coords+plan; FI-013 DECLARADO/AMARILLO si promotor+actividad+ubicacion. GAP-FI-011-001 (MEDIA/CAMPO) y GAP-FI-013-001 (MEDIA/GABINETE) siempre. Nunca VERDE. Sin visores, sin WMS, sin IA. Integrado en IV-02 (`inventory-build`). Carga automática de phase2_result.json. | P1 | M | IV-00, IV-01, F4-01, CA-10, OB-06 | ✅ **COMPLETADO 2026-04-30** — `src/eia_agent/core/inventory_context_builder.py`. 105 tests OK. 2696 suite OK (12 skipped). FI-013 ready=True si promotor+actividad+ubicacion. FI-011 ready siempre False. | `docs/INVENTORY_CONTEXT_BUILDER.md` |
+| IV-10 | Constructor de factores FI-007 Flora y FI-008 Fauna desde Fase 2/Fase 4 offline: `extract_biodiversity_context()`, `detect_flora_mentions()`, `detect_fauna_mentions()`, `has_biodiversity_related_context()`, `build_flora_factor_from_phase_data()`, `build_fauna_factor_from_phase_data()`, `build_biodiversity_inventory_factors_from_phase_data()`, `merge_biodiversity_factors_into_summary()`, `BiodiversityInventoryBuildResult`. FI-007/FI-008 DECLARADO si promotor declara biodiversidad; ESTIMADO si ubicación/contexto ENP/Red Natura; PENDIENTE si sin datos. ROJO_AMARILLO con flora/hábitat/fauna/nidificación detectados, CAMPO_NECESARIO con menciones. GAP-FI-007-001 y GAP-FI-008-001 ALTA si Red Natura/menciones / MEDIA en general; GAP-002 ALTA/CAMPO si menciones. Nunca VERDE. No afirma ausencia de flora ni fauna. Sin WMS/bancos biodiversidad/IA. Integrado en IV-02. | P1 | M | IV-00, IV-01, F4-01, CA-10, IV-06, OB-06 | ✅ **COMPLETADO 2026-05-02** — `src/eia_agent/core/inventory_biodiversity_builder.py`. 155 tests OK. 3443 suite OK (12 skipped). ready=False siempre. | **NUEVO** — `docs/INVENTORY_BIODIVERSITY_BUILDER.md` |
+| IV-09 | Constructor de factor FI-012 Patrimonio cultural desde Fase 2/Fase 4 offline: `extract_heritage_context()`, `detect_heritage_mentions()`, `build_heritage_factor_from_phase_data()`, `build_heritage_inventory_factor_from_phase4()`, `merge_heritage_factor_into_summary()`, `HeritageInventoryBuildResult`. FI-012 DECLARADO si promotor declara info patrimonial; ESTIMADO si ubicación/menciones en fase4/cartografía; PENDIENTE si sin datos. ROJO_AMARILLO con BIC/yacimiento/arqueología detectados. GAP-FI-012-001 (ALTA/GABINETE) siempre; GAP-FI-012-002 (ALTA/GABINETE) si menciones. Nunca VERDE. No afirma ausencia de patrimonio. Sin consulta a inventarios/IA. Integrado en IV-02 (`inventory-build`). | P1 | M | IV-00, IV-01, F4-01, CA-10, OB-06 | ✅ **COMPLETADO 2026-05-01** — `src/eia_agent/core/inventory_heritage_builder.py`. 119 tests OK. 3288 suite OK (12 skipped). ready=False siempre. | **NUEVO** — `docs/INVENTORY_HERITAGE_BUILDER.md` |
+| IV-08 | Constructor de factor FI-015 Cambio climático desde Fase 2/Fase 4 offline: `extract_climate_change_context()`, `detect_ghg_relevant_sources()`, `detect_climate_vulnerability_terms()`, `build_climate_change_factor_from_phase_data()`, `build_climate_change_inventory_factor_from_phase4()`, `merge_climate_change_factor_into_summary()`, `ClimateChangeInventoryBuildResult`. FI-015 DECLARADO si clima CL-06 + actividad declarada; ESTIMADO si solo uno; PENDIENTE si ninguno. ROJO_AMARILLO con diesel/generador/caldera/camión. GAP-FI-015-001 (ALTA si combustión/MEDIA si no, GABINETE); GAP-FI-015-002 (MEDIA/GABINETE) siempre. Nunca VERDE. Sin cuantificación de emisiones, sin huella de carbono, sin IA. Integrado en IV-02 (`inventory-build`). | P1 | M | IV-00, IV-01, F4-01, CL-06, OB-06 | ✅ **COMPLETADO 2026-05-01** — `src/eia_agent/core/inventory_climate_change_builder.py`. 126 tests OK. 3169 suite OK (12 skipped). ready=False siempre. | **NUEVO** — `docs/INVENTORY_CLIMATE_CHANGE_BUILDER.md` |
+| IV-07 | Constructor de factores FI-002 Geología, FI-003 Suelos y FI-004 Hidrología desde Fase 4 offline: `has_geology_source_planned()`, `has_soil_source_planned()`, `has_hydrology_source_planned()`, `extract_physical_context()`, `build_geology_factor_from_phase4()`, `build_soil_factor_from_phase4()`, `build_hydrology_factor_from_phase4()`, `build_physical_inventory_factors_from_phase4()`, `merge_physical_factors_into_summary()`, `PhysicalInventoryBuildResult`. FI-002/FI-003/FI-004 ESTIMADO/AMARILLO si hay plan o ubicación; PENDIENTE/NO_CONSTA si sin datos. GAP-FI-002-001 (MEDIA/GABINETE), GAP-FI-003-001 (MEDIA/CAMPO), GAP-FI-004-001 (ALTA si MAP-006/MEDIA si no/GABINETE) siempre. Nunca VERDE. Sin IGME/SIGPAC/SNCZI/IA. No afirma ausencia de cauces, suelo sin afección ni geología sin interés. Integrado en IV-02 (`inventory-build`). | P1 | M | IV-00, IV-01, F4-01, CA-10, CA-11 | ✅ **COMPLETADO 2026-05-01** — `src/eia_agent/core/inventory_physical_builder.py`. 119 tests OK. 3043 suite OK (12 skipped). ready=False siempre. | **NUEVO** — `docs/INVENTORY_PHYSICAL_BUILDER.md` |
+| IV-06 | Constructor de factores FI-009 Espacios Naturales Protegidos y FI-010 Red Natura 2000 desde Fase 4 offline: `has_red_natura_map_planned()`, `has_enp_map_planned()`, `extract_protected_area_context()`, `build_enp_factor_from_phase4()`, `build_red_natura_factor_from_phase4()`, `build_protected_areas_inventory_factors_from_phase4()`, `merge_protected_area_factors_into_summary()`, `ProtectedAreasInventoryBuildResult`. FI-009/FI-010 ESTIMADO/AMARILLO si hay plan cartográfico (MAP-004 o cualquier plan); PENDIENTE/NO_CONSTA si sin plan. GAP-FI-009-001 y GAP-FI-010-001 siempre ALTA/GABINETE. Nunca VERDE. Sin WMS/WMTS, sin visores, sin IA. No afirma ausencia de ENP ni de Red Natura. No activa/descarta evaluación de repercusiones. Integrado en IV-02 (`inventory-build`). | P1 | S | IV-00, IV-01, F4-01, CA-10, CA-11 | ✅ **COMPLETADO 2026-04-30** — `src/eia_agent/core/inventory_protected_areas_builder.py`. 108 tests OK. 2924 suite OK (12 skipped). ready=False siempre. | **NUEVO** — `docs/INVENTORY_PROTECTED_AREAS_BUILDER.md` |
+| F5-01 | Gate de cierre de Fase 5 / Inventario ambiental offline: `Phase5GateIssue`, `Phase5GateResult`, `evaluate_phase5_gate()`, `evaluate_phase5_gate_from_inventory_json()`, `build_phase5_gate_markdown()`, `write_phase5_gate_outputs()`. Evalúa si los 16 factores del inventario cumplen los requisitos mínimos para avanzar a Fase 6. Detecta errores estructurales (count, duplicados, IDs inválidos, factores ausentes), incoherencias por factor (ready+ROJO, ready+gap ALTA), y problemas en gaps (criticality/resolution_mode inválidos). Decisiones: APTO_FASE6 / APTO_FASE6_CON_CAUTELAS / NO_APTO_FASE6. `administrative_ready` siempre False. CLI `inventory-gate [--write] [--prod]`. Sin IA, sin web. | P1 | S | IV-00, IV-02 | ✅ **COMPLETADO 2026-05-02** — `src/eia_agent/core/phase5_gate.py`. 75 tests OK. 3506 suite OK (12 skipped). CLI `inventory-gate [--write] [--prod]` en `run_expediente.py`. `docs/PHASE5_GATE.md`. | **NUEVO** — gate de cierre de Fase 5 |
+| IV-05 | Constructor de factores FI-006 Calidad del aire y FI-014 Ruido desde Fase 2/Fase 4 offline: `extract_activity_text()`, `detect_air_quality_relevant_operations()`, `detect_noise_relevant_operations()`, `build_air_quality_factor_from_phase_data()`, `build_noise_factor_from_phase_data()`, `build_pressure_inventory_factors_from_phase_data()`, `merge_pressure_factors_into_summary()`, `PressureInventoryBuildResult`. Detección por términos en texto de operaciones. FI-006 ROJO_AMARILLO si trituraci/cribado/corte sin filtro; AMARILLO si filtro o presión media. FI-014 ROJO_AMARILLO/CAMPO_NECESARIO si cizalla/prensa/compresor/diesel; AMARILLO/CAMPO_RECOMENDADO si ruido moderado. GAP-FI-006-001 (ALTA/CAMPO) siempre; GAP-FI-006-002 (ALTA/GABINETE) si alta presión sin filtro. GAP-FI-014-001 (ALTA o MEDIA/CAMPO); GAP-FI-014-002 (MEDIA/GABINETE) si alta presión. Nunca VERDE. Sin WMS, sin IA. Integrado en IV-02 (`inventory-build`). | P1 | M | IV-00, IV-01, F4-01, OB-06 | ✅ **COMPLETADO 2026-04-30** — `src/eia_agent/core/inventory_pressure_builder.py`. 120 tests OK. 2816 suite inventory OK (14 fallos preexistentes AEMET/climograma no relacionados). ready=False siempre. | `docs/INVENTORY_PRESSURE_BUILDER.md` |
+
+---
+
+## ÁREA 8 — IMPACTOS, MEDIDAS Y PVA (AG-9)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| IM-00 | Modelo base de impactos, medidas y PVA: tipos `ProjectAction`, `ReceptorFactor`, `ConesaAttributes`, `EnvironmentalImpact`, `MitigationMeasure`, `PVAProgram`, `Phase6Model`. Constantes `ACTION_TYPES`, `RECEPTOR_FACTOR_IDS`, `IMPACT_NATURES`, `IMPACT_STATUS`, `IMPACT_SIGNIFICANCE`, `MEASURE_TYPES`, `MEASURE_STATUS`, `PVA_FREQUENCIES`, `CONESA_ATTRIBUTE_NAMES`. Helpers `build_receptor_factors_from_inventory()`, `build_empty_phase6_model()`. Reglas AG09-13 (DIAGNOSTICA≠reductora) y AG09-14 (PRL_NO_EIA≠reductora) en `validate()`. Regla de no compensación de impactos positivos. Sin IA, sin web, sin CLI propio. | P1 | S | IV-00 | ✅ **COMPLETADO 2026-05-03** — `src/eia_agent/core/impact_model.py`. 144 tests OK en `tests/test_impact_model.py`. 3587 suite OK (12 skipped). `docs/IMPACT_MODEL.md`. | **NUEVO** — prerequisito de IM-01 y toda Fase 6. No estaba en backlog original (INC-01 del análisis de Fase 6) |
+| IM-01 | Motor determinístico de valoración Conesa: fórmula `I = 3·IN + 2·EX + MO + PE + RV + SI + AC + EF + PR + Mc`, clasificación COMPATIBLE/MODERADO/SEVERO/CRITICO/INDETERMINADO (umbrales <25/25-49/50-74/≥75), constantes `CONESA_MIN_VALUE=1`/`CONESA_MAX_VALUE=12`, `ConesaScoreResult`, funciones `calculate_conesa_score`, `classify_conesa_score`, `validate_conesa_attributes`, `apply_conesa_to_impact(with_measures=False)`, `score_phase6_impacts`. Sin IA, sin web, sin asignación automática de atributos. Principio de no mutación con `dataclasses.replace()`. | P1 | M | IM-00, IV-01 | ✅ **COMPLETADO 2026-05-03** — `src/eia_agent/core/conesa_engine.py`. 77 tests OK en `tests/test_conesa_engine.py`. 3664 suite OK (12 skipped). `docs/CONESA_ENGINE.md`. | Reescrito respecto al piloto: motor parametrizable offline puro, no genera matriz completa |
+| IM-02 | Constructor de acciones del proyecto desde Fase 2: `extract_project_action_text`, `detect_project_operations` (7 grupos: recepcion/clasificacion/tratamiento_mecanico/carga_descarga/maquinaria_auxiliar/residuos_peligrosos/cese), `build_actions_from_phase2_data`, `merge_actions_into_phase6_model`, `build_phase6_model_with_actions`. Normalización de texto (sin acentos, lowercase). Detección LER con asterisco vía regex. Acción mínima si sin detección. CLI `phase6-actions [--write]`. Sin IA, sin web, sin asignación automática de impactos. | P1 | S | IM-00 | ✅ **COMPLETADO 2026-05-04** — `src/eia_agent/core/project_action_builder.py`. 106 tests OK en `tests/test_project_action_builder.py`. 3770 suite OK (12 skipped). `docs/PROJECT_ACTION_BUILDER.md`. CLI añadida a `run_expediente.py`. | **NUEVO** (reasignado desde IM-02 anterior) — prerequisito de identificación de impactos. El anterior IM-02 (medidas) pasa a IM-03. |
+| IM-03 | Identificador preliminar de impactos acción × receptor: `ImpactIdentificationRule` con `matches(action, receptor)`, `ImpactIdentificationResult`, `default_impact_identification_rules()` (10 reglas RULE-A…RULE-J cubriendo FR-003/004/006/007/008/009/010/011/012/013/014/015), `build_minimal_receptor_factors()`, `identify_impacts_from_model`, `merge_identified_impacts_into_model`, `build_phase6_model_with_identified_impacts`. Status siempre PENDIENTE_DATOS o INDETERMINADO. Significancia siempre NO_VALORADO. Sin Conesa, sin medidas, sin PVA. CLI `phase6-identify-impacts [--write]`. | P1 | M | IM-00, IM-02 | ✅ **COMPLETADO 2026-05-05** — `src/eia_agent/core/impact_identifier.py`. 96 tests OK en `tests/test_impact_identifier.py`. 3866 suite OK (12 skipped). CLI añadida a `run_expediente.py`. `docs/IMPACT_IDENTIFIER.md`. | **NUEVO** — prerequisito de valoración (IM-01 sobre los impactos identificados) y de medidas (IM-04). El anterior IM-03 (medidas) pasa a IM-04. |
+| IM-04 | Asignador prudente de atributos Conesa: `ConesaAssignmentRule` con `matches(impact, action_lookup)`, `ConesaAssignmentResult`, `default_conesa_assignment_rules()` (10 reglas CASSIGN-A…CASSIGN-J para FR-003/004/006/007/008/009/010/011/012/013/014/015), `assign_conesa_attributes_to_impact`, `assign_conesa_attributes_to_model`. Valores tipológicos R12/R13. INDETERMINADO para ENP/Flora/Fauna/Paisaje/Patrimonio. Scoring opcional vía IM-01. CLI `phase6-assign-conesa [--write] [--no-score]`. Sin IA, sin web, sin creación de impactos/medidas/PVA. | P1 | M | IM-00, IM-01, IM-03 | ✅ **COMPLETADO 2026-05-06** — `src/eia_agent/core/conesa_attribute_assigner.py`. 86 tests OK en `tests/test_conesa_attribute_assigner.py`. 3952 suite OK (12 skipped). CLI añadida a `run_expediente.py`. `docs/CONESA_ATTRIBUTE_ASSIGNER.md`. | **NUEVO** — asignación tipológica prudente de atributos Conesa antes de medidas. El anterior IM-04 (medidas) pasa a IM-05. |
+| IM-05 | Generador de medidas correctoras por tipo de impacto: tabla tipológica | P1 | M | IM-01, IM-04 | ✅ **COMPLETADO 2026-05-06** — `src/eia_agent/core/mitigation_measure_generator.py`. 93 tests OK en `tests/test_mitigation_measure_generator.py`. 4045 suite OK (12 skipped). CLI `phase6-generate-measures [--write]` en `run_expediente.py`. `docs/MITIGATION_MEASURE_GENERATOR.md`. | Era IM-04; reasignado para dar paso a asignador Conesa. 16 reglas MGEN-A…MGEN-P. Todas las reglas aplican (no first-wins). DIAGNOSTICA+PRL_NO_EIA no reducen significancia. |
+| IM-06 | Generador de fichas PVA: 11 reglas PVAGEN-A…PVAGEN-K, un PVA por receptor, revisión anual global, E-9/E-10, GAP-PVA-001 Responsable Ambiental, nota remisión órgano ambiental. CLI `phase6-generate-pva [--write]`. | P1 | M | IM-01, IM-05 | ✅ **COMPLETADO 2026-05-09** — `src/eia_agent/core/pva_generator.py`. 82 tests OK. `docs/PVA_GENERATOR.md`. | Era IM-05; reasignado. |
+| IM-07 | Validador de cobertura PVA: DIRECT/BY_FACTOR/TRANSVERSAL, revisión anual excluida, 8 códigos PVA-COV-E/W/I, CLI `phase6-validate-pva [--write]`, exit 0/1. | P1 | S | IM-06 | ✅ **COMPLETADO 2026-05-10** — `src/eia_agent/core/pva_coverage_validator.py`. 99 tests OK. `docs/PVA_COVERAGE_VALIDATOR.md`. | ID canónico asignado por usuario (era IM-08 en backlog original). |
+| IM-08 | Generador sección C.5 acumulativos/sinérgicos: grupos acumulativos por receptor, sinergias cruzadas (5 pares), texto prudente, gaps declarados, CLI `phase6-cumulative [--write]`. | P1 | S | IM-00, IM-03 | ✅ **COMPLETADO 2026-05-12** — `src/eia_agent/core/cumulative_synergistic_section.py`. `docs/CUMULATIVE_SYNERGISTIC_SECTION.md`. | Nuevo canonical: template C.5 era IM-06 en Área 14. |
+
+---
+
+## ÁREA 9 — REDACCIÓN (AG-10)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| RD-01 | Prompts por bloque (A-K): sistema prompt especializado para cada sección del DA | P1 | L | — | ✅ **DONE** — todos los prompts AG-10/bloque_X.md creados y validados en Etapa 1 corta (2026-04-19) | Crear `/prompts/AG-10/bloque_X.md` por bloque |
+| RD-02 | Regla anti-hiperbolización para RNT (Bloque J): instrucción explícita que el tono de J no puede superar al bloque técnico | P1 | S | RD-01 | ✅ **DONE** — Regla J-3 + catálogo frases prohibidas en bloque_J_rnt.md (Etapa 1 corta 2026-04-19) | Lección L-05; causa del OBS-002 en auditoría |
+| RD-03 | Plantillas tipológicas por tipo de instalación: R12/R13 polígono industrial, canteras, industria, etc. | P2 | L | RD-01 | ⚠️ Solo R12/R13 polígono industrial validado | |
+| RD-04 | Validador de coherencia entre bloques: cruzar afirmaciones entre B↔H, I↔H, J↔H | P1 | M | RD-01 | ✅ **COMPLETADO 2026-05-17** — `src/eia_agent/core/block_consistency_validator.py`. 121 tests OK. Suite 5106 OK. 7 validadores: Red Natura, biodiversidad, patrimonio, medidas diagnósticas/PRL, ATs activas, PVA condicionado, conclusiones. 10 códigos BC-RN/BIO/HER/MEA/AT/PVA/CON. CLI `audit-block-consistency [--write]`. `docs/BLOCK_CONSISTENCY_VALIDATOR.md`. | Distinto de AU-05 (P2 — entidades entre todos los bloques) |
+
+---
+
+## ÁREA 10 — ENSAMBLADOR DOCX (M-11)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| EN-01 | Reescritura del ensamblador en Python (python-docx): eliminar dependencia de PowerShell | P1 | L | — | ✅ **VALIDADO en Nave 222 — 2026-04-19** — 0 bugs, DOCX 438 KB, multiplataforma | Lección L-03; EN-02/EN-05/EN-06/EN-07 siguen pendientes |
+| EN-02 | Tabla de posicionamiento de bloques: qué va al cuerpo del DA, anejos, o solo expediente interno | P1 | S | EN-01 | ⚠️ Resuelto manualmente; no codificado | Lección postmortem §3.5 |
+| EN-03 | Inserción de imágenes PNG en DOCX: resolución del bug de rutas con barra invertida | P1 | S | EN-01 | ✅ **Resuelto en Nave 222** — ensamblar_docx.py usa Path() | OBS-005 de auditoría — corregido en sesión |
+| EN-04 | Eliminación de referencia huérfana a numbering.xml | P1 | S | EN-01 | ⚠️ Bug documentado en OBS-004 | Eliminar rId3 del document.xml.rels |
+| EN-05 | TOC automático: tabla de contenidos con numeración de sección y página | P2 | M | EN-01 | ❌ No implementado en piloto | Requiere python-docx + Word field codes |
+| EN-06 | Portada parametrizable: logo del promotor, número de expediente, fecha | P2 | S | EN-01 | ⚠️ Portada hardcoded en piloto | |
+| EN-07 | Estilos Word completos: Heading1-3, Normal, Quote, TableHeader — conformes a guías de estilo de la administración | P2 | M | EN-01 | ⚠️ Estilos básicos en PS1, sin conformidad con guías admin | |
+| EN-08 | Pipeline CI/CD para el ensamblador: test automatizado que valide que el DOCX abre sin errores | P2 | M | EN-01 | ❌ No existe | |
+
+---
+
+## ÁREA 11 — AUDITORÍA (M-12)
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| AU-01 | Checklist art.45 + Anexo VI como código: 12 requisitos ART45-01…ART45-12, estados CUBIERTO/PARCIAL/NO_CUBIERTO/NO_APLICA, issues ERROR/WARNING, CLI `audit-art45 [--write]`, administrative_ready siempre False, `docs/ART45_CHECKLIST.md`. | P1 | M | — | ✅ **COMPLETADO 2026-05-14** — `src/eia_agent/core/art45_checklist.py`. 81 tests OK. |
+| AU-02 | Validador de regla de prudencia: grep de patrones problemáticos ("no existe", "no hay", "ausencia de") sin estado de evidencia | P1 | M | RD-04 | ✅ **COMPLETADO 2026-05-14** — `src/eia_agent/core/prudence_validator.py`. 109 tests OK. 8 categorías, contexto metodológico, inventario + Phase6 + markdown + files. CLI `audit-prudence [--write]`, `docs/PRUDENCE_VALIDATOR.md`. | Lección L-07 |
+| AU-03 | Validador de trazabilidad: todos los hechos del DA deben tener HC o TR correspondiente | P1 | M | NL-01 | ✅ **COMPLETADO 2026-05-14** — `src/eia_agent/core/traceability_validator.py`. 117 tests OK. TRAZADO/PARCIAL/NO_TRAZADO/NO_APLICA, 16 factores, 16 fuentes JSON, extracción de claims de markdown. CLI `audit-traceability [--write]`, `docs/TRACEABILITY_VALIDATOR.md`. | |
+| AU-04 | Generador de informe de auditoría estructurado: JSON + MD con OBS categorizadas por criticidad | P1 | M | AU-01, AU-02, AU-03 | ✅ **COMPLETADO 2026-05-15** — `src/eia_agent/core/final_audit_report.py`. 104 tests OK. CONFORME/CON_OBS/NO_CONFORME/INCOMPLETO, 5 severidades BLOQUEANTE…INFO, combina AU-01+AU-02+AU-03. CLI `audit-final [--write]`, `docs/FINAL_AUDIT_REPORT.md`. | |
+| AU-05 | Validador de coherencia inter-bloques: cruzar entidades entre todos los bloques A-K | P2 | L | RD-04 | ❌ No existe | |
+
+---
+
+## ÁREA 11b — INTEGRACIÓN / PIPELINE
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| PIPE-01 | Pipeline técnico automático: orquesta F5→AU-04 en un único comando `run-technical-pipeline [--write] [--prod] [--continue-on-error]` | P1 | M | IM-00…IM-08, AU-01…AU-04 | ✅ **COMPLETADO 2026-05-15** — `src/eia_agent/core/technical_pipeline.py`. 72 tests OK. 13 pasos, SUCCESS/FAILED/SKIPPED/BLOCKED/WARNING, stop_on_error, dry-run, `docs/TECHNICAL_PIPELINE.md`. | Nuevo hito de integración post AU-04/QA-01 |
+| QA-02 | Prueba end-to-end del pipeline sobre copia temporal de NAVE-222 | P1 | S | PIPE-01 | ✅ **COMPLETADO 2026-05-15** — 13/13 pasos OK, 3 bugs corregidos. Suite 4875 tests OK. `control_interno/qa02_prueba_end_to_end_pipeline.md`. | |
+| PIPE-02 | Integrar RD-04 y RD-06 en el pipeline técnico y AU-04 | P1 | S | PIPE-01, RD-04, RD-06 | ✅ **COMPLETADO 2026-05-17** — pipeline ampliado a 15 pasos (añade AUDIT_BLOCK_CONSISTENCY + AUDIT_CONESA). AU-04 acepta `block_consistency_data` y `conesa_check_data`. None → sin issue (backward compatible). 6 tests nuevos. Suite 5235 tests OK. | |
+| PIPE-03 | Integrar RD-08 y RD-09 en el pipeline técnico y AU-04 | P1 | S | PIPE-02, RD-08, RD-09 | ✅ **COMPLETADO 2026-05-18** — pipeline ampliado a 17 pasos (añade AUDIT_DIAGNOSTIC_MEASURES + AUDIT_PRL_MEASURES). AU-04 acepta `diagnostic_measure_data` y `prl_measure_data`. None → sin issue (backward compatible). 11 tests `TestNewAuditStepsPIPE03` + clases RD-08/RD-09 en AU-04. Suite 5482 tests OK. | |
+| QA-03 | Prueba end-to-end pipeline 17 pasos sobre copia NAVE-222 | P1 | S | PIPE-03 | ✅ **COMPLETADO 2026-05-18** — 17/17 pasos OK, 0 bugs de código. Outputs esperados presentes. 2 incidencias documentadas (input falta + nombre spec incorrecto). Suite 5482 OK. `control_interno/qa03_prueba_end_to_end_pipeline_17steps.md`. | |
+| DOC-00 | Manifest de ensamblado del Documento Ambiental | P1 | S | QA-03, PIPE-03 | ✅ **COMPLETADO 2026-05-18** — `src/eia_agent/core/document_manifest.py`. 63 tests OK. Bloques A-K, READY/PARTIAL/MISSING, CLI `document-manifest [--write]`. Corrección `phase6_model_scored.json`→`phase6_model_with_conesa.json` en 6 fuentes+docs. Suite 5545 OK. `docs/DOCUMENT_MANIFEST.md`. | |
+| DOC-01 | Generador Markdown del Documento Ambiental | P1 | M | DOC-00 | ✅ **COMPLETADO 2026-05-18** — `src/eia_agent/core/document_markdown_builder.py`. 108 tests OK. Bloques A-K GENERATED/PARTIAL/MISSING. `DocumentBlockBuildResult`, `DocumentMarkdownBuildResult`, helpers `safe_read_text`/`safe_load_json`/`format_missing_notice`. 11 builders A-K. `assemble_document_markdown`. `build_document_markdown(write_outputs)`. CLI `document-build-md [--write]`. Exit 0 si no MISSING. Sin IA, sin web, sin DOCX. Suite 5653 OK. `docs/DOCUMENT_MARKDOWN_BUILDER.md`. | |
+
+---
+
+## ÁREA 12 — BACKEND / INFRAESTRUCTURA
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| BE-01 | API REST: endpoints por fase (/fase1, /fase2, ...) con autenticación básica | P2 | L | NL-03 | ❌ No existe | Habilita separación frontend/backend |
+| BE-02 | Sistema de proyectos: crear, listar, abrir expedientes con ID único | P2 | M | NL-03 | ❌ No existe | |
+| BE-03 | Almacenamiento: estructura de carpetas por expediente en disco (compatible con el piloto) | P1 | S | — | ✅ Validada en piloto | Solo documentar y normalizar |
+| BE-04 | Gestión de AEMET API key: configuración segura, no hardcoded | P1 | S | CL-01 | ⚠️ Key usada en piloto, no segura | |
+| BE-05 | Worker asíncrono para tareas largas (generación de mapas, llamadas WMS): evitar timeouts | P2 | L | BE-01, CA-02 | ❌ No existe | |
+| BE-06 | Logging estructurado: trazabilidad de cada llamada LLM + herramienta + tiempo de respuesta | P2 | M | NL-06 | ❌ No existe | |
+
+---
+
+## ÁREA 13 — FRONTEND / UX
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| FE-01 | Panel de estado del expediente: visualización de fases, gates y pendientes | P3 | L | BE-01, BE-02 | ❌ No existe | |
+| FE-02 | Formulario de ingesta: carga de documentos del promotor con validación de formato | P3 | L | BE-01, IN-01 | ❌ No existe | |
+| FE-03 | Visor de mapa del expediente: visualizar los 8 mapas mínimos con capa superpuesta | P3 | XL | BE-01, CA-03 | ❌ No existe | |
+| FE-04 | Editor de fichas de inventario: revisar y aprobar fichas generadas por AG-8 | P3 | L | BE-01, IV-01 | ❌ No existe | |
+| FE-05 | Dashboard de auditoría: resultado M-12 con OBS marcadas e historial de versiones | P3 | L | BE-01, AU-04 | ❌ No existe | |
+| FE-06 | Descarga del DOCX final desde interfaz | P3 | S | BE-01, EN-01 | ❌ No existe | |
+
+---
+
+---
+
+## ÁREA 14 — MEJORAS DERIVADAS DEL SEGUNDO PILOTO (Nave 222 / OBS-M12)
+
+> Ítems generados a partir del análisis postmortem comparativo del expediente EIA-2026-RECIMETAL-NAVE-222 (2026-04-19). Fuentes: OBS-M12-001 a OBS-M12-007 + aprendizajes metodológicos validados.
+
+| ID | Ítem | Prioridad | Esfuerzo | Dependencias | Estado baseline | Notas |
+|----|------|-----------|----------|--------------|-----------------|-------|
+| OB-04 | Regla de visibilidad de gaps ALTA en Bloque A.1: todo gap ALTA sobre identidad del promotor o instalación debe aparecer en A.1 con texto estándar | P1 | S | OB-01 | ✅ **COMPLETADO 2026-04-23** — `src/eia_agent/core/block_a_gap_visibility.py`: `check_block_a_gap_visibility()`, `check_block_a_gap_visibility_from_files()`, `GapVisibilityResult`, `GapVisibilityIssue`, `extract_markdown_section()`, `normalize_criticality()`, `is_identity_related_gap()`, `load_gaps_json()`. Código explícito en A.1/A.3.1. WARNING si visible solo en otra sección. ERROR si no visible. 65 tests OK. 1007 suite OK. | `docs/BLOCK_A_GAP_VISIBILITY.md` |
+| OB-05 | Sistema AT formalizado: módulo `assumption_test_system.py` — `AsuncionTest`, `AsuncionTestRegistry`, `create_assumption_from_gap/cont`, `load/write_assumptions_registry`, `extract_active_assumption_refs`, `build_assumptions_markdown`, `assumptions_block_administrative_submission`. CLI `assumptions-summary [--write]`. | P1 | M | OB-03 | ✅ **COMPLETADO 2026-05-17** — `src/eia_agent/core/assumption_test_system.py`. 110 tests OK. Suite 4985 tests OK. CLI `assumptions-summary [--write]`. `docs/ASSUMPTION_TEST_SYSTEM.md`. impide_aptitud_administrativa siempre True en ACTIVA. No confirma datos, no resuelve gaps, no modifica impactos. | Lado prompt: Etapa 1 ✅. Lado código: ✅ **2026-05-17** |
+| RD-05 | Anti-"despreciable": validador en AU-02 que detecta "despreciable/nulo/irrelevante/insignificante" sin estado de evidencia calificado en bloques .md | P1 | S | RD-01, AU-02 | ✅ PROMPT / ❌ CÓDIGO | Lado prompt: §6 SYSTEM_BASE + H-9 + J-3 (Etapa 1). Lado código: patrón regex en AU-02 pendiente |
+| RD-06 | Conesa obligatorio para todos los impactos: checker en NL-02/AU-01 que verifica los 10 atributos Conesa en todos los IMP nucleares del JSON — incluye impactos Compatible | P1 | S | NL-02, IM-01 | ✅ **COMPLETADO 2026-05-17** — `src/eia_agent/core/conesa_checker.py`. 89 tests OK. Suite 5195 OK. `has_complete_conesa_attributes`, `missing_conesa_attributes`, `impact_has_valid_conesa_explanation`, `validate_impact_conesa_coverage`, `validate_phase6_conesa_coverage`, `validate_markdown_conesa_coverage`, `validate_conesa_coverage_from_files`. Reglas CC-A001…CC-F001 + CC-MD-001…CC-MD-003. CLI `audit-conesa [--write]`. `docs/CONESA_CHECKER.md`. | Lado prompt: Etapa 1 ✅. Lado código: ✅ 2026-05-17 |
+| IM-06 | Sección C.5 acumulativos/sinérgicos obligatoria: template/función para C.5 con 4 áreas mínimas — conforme art. 45 Ley 21/2013 | P1 | S | IM-01 | ✅ PROMPT / ❌ CÓDIGO | Lado prompt: AG09-11 + C-10 (Etapa 1). Lado código: template C.5 en IM-01 pendiente |
+| IM-07 | Cadena condicional para CONTs no resueltos: función que detecta CONTs abiertos y genera entradas `cadena_condicional` con propagación a medidas y PVA | P1 | M | IM-01, OB-03 | ✅ PROMPT / ❌ CÓDIGO | Lado prompt: AG09-12 + C-11 + Paso 3bis D + E-9 (Etapa 1). Lado código: módulo de propagación pendiente |
+| RD-07 | Cross-reference gap ALTA ↔ impacto positivo: validador que verifica nota de incertidumbre en Bloque C + umbral provisional en PVA para positivos con gap ALTA | P2 | S | NL-02, IM-03 | ✅ PROMPT / ❌ CÓDIGO | Lado prompt: C-12 + E-10 (Etapa 1). Lado código: P2. **P2 canónico** (conflicto C-04 resuelto: roadmap lo promovía a P1 erróneamente) |
+| RD-08 | Diagnóstico≠reductor (código): verificación en NL-02/IM-02 que ninguna medida con `tipo: diagnostico` aparece en `tabla_impacto_medida` como reductora de significancia | P1 | S | NL-02, IM-02 | ✅ **COMPLETADO 2026-05-17** — `src/eia_agent/core/diagnostic_measure_validator.py`. 97 tests OK. CLI `audit-diagnostic-measures [--write]`. `docs/DIAGNOSTIC_MEASURE_VALIDATOR.md`. Suite 5332 OK. | Lado prompt: D-9 + AG09-13 (Etapa 1). Detección keyword + negación + sole-reducer check. |
+| RD-09 | EIA/PRL separator (código): verificación que medidas `tipo: prl` tienen `nota_alcance` y no tienen significancia residual asignada en `tabla_impacto_medida` | P1 | S | NL-02, IM-02 | ✅ **COMPLETADO 2026-05-17** — `src/eia_agent/core/prl_measure_validator.py`. 110 tests OK. CLI `audit-prl-measures [--write]`. Valida modelo + markdowns. `docs/PRL_MEASURE_VALIDATOR.md`. Suite 5442 OK. | Lado prompt: D-10 + AG09-14. 4 reglas: E001 (tipo erróneo), E002 (afirma reducción ambiental), E003 (única medida SEVERO/CRITICO), W001 (status no alineado). |
+
+---
+
+## RESUMEN EJECUTIVO POR ÁREA
+
+| Área | Ítems P1 | Ítems P2 | Ítems P3 | Bloqueante para P2 |
+|------|----------|----------|----------|-------------------|
+| Núcleo lógico | 7 | 3 | 0 | NL-01, NL-03 |
+| Ingesta | 4 | 1 | 0 | IN-01 |
+| Cierre objeto | 5 (+OB-04, OB-05) | 0 | 0 | OB-01 |
+| Triaje normativo | 3 | 1 | 0 | TN-01 |
+| Cartografía | 5 | 2 | 1 | CA-01, CA-02 |
+| Clima | 4 | 0 | 0 | CL-01 (validado) |
+| Inventario | 4 | 0 | 0 | IV-01 |
+| Impactos/PVA | 6 (+IM-07, IM-08) | 1 | 0 | IM-01 |
+| Redacción | 8 (+RD-05 a RD-09) | 2 (+RD-07) | 0 | RD-01 |
+| Ensamblador DOCX | 3 (EN-01 ✅ DONE) | 4 | 0 | — (EN-01 ya validado) |
+| Auditoría | 4 | 1 | 0 | AU-01 |
+| Backend | 3 | 3 | 0 | BE-01 |
+| Frontend | 0 | 0 | 6 | BE-01 |
+| Mejoras Nave 222 | 7 | 1 | 0 | OB-04 |
+| **TOTAL** | **63** | **19** | **7** | |
+
+> **Cambios respecto a la versión anterior**: EN-01 y EN-03 marcados ✅ VALIDADO. Área 14 añadida con 9 ítems. Total P1: 48 → 63 (+15 nuevos, -1 completado = neto +14).
+
+---
+
+*Documento generado por EIA-Agent v2.1 — Productización — 2026-04-13*  
+*Actualizado 2026-04-19 — postmortem Nave 222 — OBS-M12-001 a OBS-M12-007 incorporados*
