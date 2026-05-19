@@ -1,0 +1,46 @@
+{
+  "version": "2.1",
+  "descripcion": "Indice de schemas JSON v2.1 del sistema EIA-Agent. Cada entrada mapea una capa del expediente con su schema de validacion.",
+  "capas": [
+    {
+      "nombre": "hechos_confirmados",
+      "archivo_json": "capas/hechos_confirmados.json",
+      "schema": "config/schemas/v2_1/hechos_confirmados.schema.json",
+      "descripcion": "Hechos fácticos extraidos de la documentacion del promotor con estado de evidencia y fuentes"
+    },
+    {
+      "nombre": "inferencias_y_gaps",
+      "archivo_json": "capas/inferencias_y_gaps.json",
+      "schema": "config/schemas/v2_1/inferencias_y_gaps.schema.json",
+      "descripcion": "Gaps documentales, contradicciones, inferencias tecnicas y cautelas"
+    },
+    {
+      "nombre": "normativa_aplicable",
+      "archivo_json": "capas/normativa_aplicable.json",
+      "schema": "config/schemas/v2_1/normativa_aplicable.schema.json",
+      "descripcion": "Normativa legal y administrativa relevante con estado de verificacion"
+    },
+    {
+      "nombre": "matriz_trazabilidad",
+      "archivo_json": "capas/matriz_trazabilidad.json",
+      "schema": "config/schemas/v2_1/matriz_trazabilidad.schema.json",
+      "descripcion": "Trazabilidad de datos clave: vincula valores con fuentes primarias y hechos confirmados"
+    },
+    {
+      "nombre": "cartografia_trace",
+      "archivo_json": "capas/cartografia_trace.json",
+      "schema": "config/schemas/v2_1/cartografia_trace.schema.json",
+      "descripcion": "Trazabilidad cartografica: verificaciones internas y mapas generados"
+    },
+    {
+      "nombre": "salidas_generadas",
+      "archivo_json": "capas/salidas_generadas.json",
+      "schema": "config/schemas/v2_1/salidas_generadas.schema.json",
+      "descripcion": "Registro de archivos y documentos producidos en cada fase del expediente"
+    }
+  ],
+  "comun": {
+    "schema": "config/schemas/v2_1/common_defs.schema.json",
+    "descripcion": "Definiciones reutilizables ($defs): EvidenceState, Criticidad, FechaISO, patrones de ID, EstadoCartografia, EstadoNormativa, TipoCartografia"
+  }
+}

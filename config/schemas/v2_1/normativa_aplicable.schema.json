@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Capa 3 — Normativa aplicable",
+  "description": "Array de normas legales y administrativas relevantes para el expediente. Cada entrada identifica la norma, su tipo, estado de verificacion y notas de aplicabilidad.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/NormaItem"
+  },
+  "$defs": {
+    "TipoNorma": {
+      "title": "Tipo de norma",
+      "description": "Clasificacion del instrumento normativo. No se cierra en exceso para admitir nuevas tipologias.",
+      "type": "string",
+      "enum": [
+        "ley_estatal",
+        "real_decreto",
+        "decreto_ley",
+        "decreto_autonomico_canarias",
+        "decreto_autonomico_andalucia",
+        "decreto_ley_autonomico_canarias",
+        "ley_autonomica_canarias",
+        "ley_autonomica_andalucia",
+        "orden_ministerial",
+        "directiva_europea",
+        "reglamento_europeo",
+        "normativa_residuos",
+        "normativa_ruido",
+        "normativa_clima",
+        "normativa_cartografia",
+        "procedimiento",
+        "otro"
+      ]
+    },
+    "NormaItem": {
+      "title": "Norma aplicable",
+      "type": "object",
+      "required": [
+        "id",
+        "tipo",
+        "norma",
+        "estado"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "description": "Identificador de la norma. Patron NJ-001.",
+          "type": "string",
+          "pattern": "^NJ-[0-9]{3}$"
+        },
+        "tipo": {
+          "description": "Tipo de instrumento normativo.",
+          "$ref": "#/$defs/TipoNorma"
+        },
+        "norma": {
+          "description": "Denominacion oficial completa de la norma.",
+          "type": "string",
+          "minLength": 5
+        },
+        "estado": {
+          "description": "Estado de verificacion de la norma.",
+          "$ref": "common_defs.schema.json#/$defs/EstadoNormativa"
+        },
+        "referencia_boe": {
+          "description": "Referencia BOE si aplica.",
+          "type": "string"
+        },
+        "referencia_boc": {
+          "description": "Referencia BOC si aplica.",
+          "type": "string"
+        },
+        "fecha_verificacion_online": {
+          "description": "Fecha de verificacion online en formato YYYY-MM-DD.",
+          "$ref": "common_defs.schema.json#/$defs/FechaISO"
+        },
+        "nota": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

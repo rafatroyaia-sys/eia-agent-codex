@@ -1,0 +1,474 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "eia_schemas_v21",
+  "version": "2.1",
+  "descripcion": "Schemas del modelo de datos EIA-Agent v2.1 — extraídos del piloto real EIA-2026-RECIMETAL-PARCELA",
+  "fecha_extraccion": "2026-04-14",
+  "fuente_de_verdad": "expediente-EIA-2026-RECIMETAL-PARCELA/capas/",
+  "nota": "Cada clave en 'capas' corresponde al nombre de archivo JSON dentro de capas/ del expediente. IMPORTANTE: los prefijos de ID y los campos requeridos han sido extraídos de los JSONs reales del piloto, no de un diseño teórico previo.",
+
+  "enums": {
+    "estados_evidencia": [
+      "CONFIRMADO",
+      "DECLARADO",
+      "INFERIDO",
+      "ESTIMADO",
+      "PENDIENTE",
+      "DESCARTADO"
+    ],
+    "tipos_inferencia": [
+      "CONTRADICCION_RESUELTA_PROVISIONALMENTE",
+      "CONTRADICCION",
+      "INFERIDO",
+      "PENDIENTE_NO_BLOQUEANTE_TEST",
+      "PENDIENTE",
+      "PUNTO_SENSIBLE_FASE2",
+      "CAUTELA_FASE3",
+      "CERRADO_PARCIALMENTE_FASE3"
+    ],
+    "tipos_normativa": [
+      "ley_estatal",
+      "real_decreto",
+      "ley_autonomica_canarias",
+      "decreto_autonomico_canarias",
+      "decreto_ley_autonomico_canarias"
+    ],
+    "estados_normativa": [
+      "VERIFICADA ONLINE",
+      "REFERENCIADA"
+    ],
+    "tipos_cartografia": [
+      "GENERADO_AUTOMATICAMENTE",
+      "VERIFICACION_INTERNA"
+    ],
+    "estados_cartografia": [
+      "GENERADO",
+      "VERIFICADO",
+      "ERROR",
+      "PENDIENTE"
+    ]
+  },
+
+  "capas": {
+
+    "hechos_confirmados": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Hechos del expediente con estado de evidencia explícito. Prefijo de ID: HC-.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "categoria", "campo", "valor", "estado", "fuentes"],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^HC-\\d{3}$",
+            "description": "Ej: HC-001, HC-037"
+          },
+          "categoria": {
+            "type": "string",
+            "description": "Categoría temática del hecho.",
+            "examples": [
+              "promotor", "tecnico_redactor", "emplazamiento", "procedimiento",
+              "actividad", "operaciones", "residuos_admitidos", "residuos_propios",
+              "equipos", "infraestructuras", "fases_proyecto", "fechas_documento",
+              "objeto_evaluado"
+            ]
+          },
+          "campo": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Nombre del campo o atributo."
+          },
+          "valor": {
+            "description": "Valor del hecho. Puede ser string, number, array u object."
+          },
+          "estado": {
+            "type": "string",
+            "enum": ["CONFIRMADO", "DECLARADO", "INFERIDO", "ESTIMADO", "PENDIENTE", "DESCARTADO"]
+          },
+          "fuentes": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "description": "Lista de fuentes documentales. Mínimo una."
+          },
+          "nota": {
+            "description": "Nota aclaratoria. Puede ser string o null.",
+            "oneOf": [{"type": "string"}, {"type": "null"}]
+          },
+          "tipo_fuente": {
+            "type": "string",
+            "description": "Tipo de fuente cuando no es documental estándar.",
+            "examples": ["confirmacion_usuario", "tablas_documentales + confirmacion_usuario"]
+          }
+        }
+      }
+    },
+
+    "inferencias_y_gaps": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Inferencias, contradicciones, gaps, puntos sensibles y cautelas. Prefijos de ID: CONT-, INF-, GAP-, PS-INF-, CAUTELA-.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "tipo", "criticidad", "campo"],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^(CONT|INF|GAP|PS-INF|CAUTELA)-\\d{3}$",
+            "description": "Ej: CONT-001, GAP-002, CAUTELA-003, PS-INF-001"
+          },
+          "tipo": {
+            "type": "string",
+            "description": "Tipo de entrada. Los caracteres acentuados (CONTRADICCIÓN) se aceptan en valores reales del piloto; en producción usar la versión sin acentos para robustez.",
+            "examples": [
+              "CONTRADICCION_RESUELTA_PROVISIONALMENTE",
+              "CONTRADICCION",
+              "INFERIDO",
+              "PENDIENTE_NO_BLOQUEANTE_TEST",
+              "PENDIENTE",
+              "PUNTO_SENSIBLE_FASE2",
+              "CAUTELA_FASE3",
+              "CERRADO_PARCIALMENTE_FASE3"
+            ]
+          },
+          "criticidad": {
+            "type": "string",
+            "description": "Nivel de criticidad. Valores canónicos: ALTA, MEDIA, BAJA, RESUELTA. Puede incluir sufijos.",
+            "examples": ["ALTA", "MEDIA", "BAJA", "RESUELTA", "MEDIA — no bloqueante en modo test"]
+          },
+          "campo": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Aspecto o campo al que afecta."
+          },
+          "descripcion": {
+            "type": "string",
+            "description": "Descripción del gap o inferencia. Requerida para GAP e INF."
+          },
+          "descripcion_original": {
+            "type": "string",
+            "description": "Descripción original de la contradicción (alternativa a 'descripcion' en CONT)."
+          },
+          "accion_requerida": {
+            "type": "string",
+            "description": "Acción necesaria para resolver. Presente en GAPs."
+          },
+          "estado_actual": {
+            "type": "string",
+            "description": "Estado de resolución actual."
+          },
+          "resolucion": {
+            "type": "string",
+            "description": "Cómo se resolvió (para CONT resueltas)."
+          },
+          "accion_pendiente_expediente_real": {
+            "type": "string",
+            "description": "Qué hacer en expediente real (vs. modo test)."
+          },
+          "tipo_fuente_resolucion": {
+            "type": "string",
+            "description": "Tipo de fuente de la resolución provisional."
+          }
+        }
+      }
+    },
+
+    "normativa_aplicable": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Normativa aplicable al expediente verificada online. Prefijo de ID: NJ-.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "tipo", "norma", "estado"],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^NJ-\\d{3}$",
+            "description": "Ej: NJ-001, NJ-010"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "ley_estatal",
+              "real_decreto",
+              "ley_autonomica_canarias",
+              "decreto_autonomico_canarias",
+              "decreto_ley_autonomico_canarias"
+            ]
+          },
+          "norma": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Denominación oficial completa de la norma."
+          },
+          "estado": {
+            "type": "string",
+            "enum": ["VERIFICADA ONLINE", "REFERENCIADA"]
+          },
+          "referencia_boe": {
+            "type": "string",
+            "description": "Ej: BOE-A-2013-12913"
+          },
+          "referencia_boc": {
+            "type": "string",
+            "description": "Ej: BOC 2022/257"
+          },
+          "fecha_verificacion_online": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Fecha de verificación. Formato AAAA-MM-DD."
+          },
+          "articulos_relevantes": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "anexos_relevantes": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "incidencia": {
+            "type": "string"
+          },
+          "nota": {
+            "type": "string"
+          },
+          "modificaciones": {
+            "type": "array",
+            "items": {"type": "string"},
+            "description": "Normas que han modificado esta."
+          }
+        }
+      }
+    },
+
+    "matriz_trazabilidad": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Trazabilidad de datos clave: origen, fuente, estado y coherencia entre fuentes. Prefijo de ID: TR-.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "dato", "valor", "estado_evidencia", "fuente_primaria"],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^TR-\\d{3}$",
+            "description": "Ej: TR-001, TR-021"
+          },
+          "dato": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Nombre descriptivo del dato trazado."
+          },
+          "valor": {
+            "description": "Valor del dato. Puede ser string, number u object."
+          },
+          "estado_evidencia": {
+            "type": "string",
+            "enum": ["CONFIRMADO", "DECLARADO", "INFERIDO", "ESTIMADO", "PENDIENTE", "DESCARTADO"]
+          },
+          "fuente_primaria": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fuente_secundaria": {
+            "description": "Fuente de contraste. Puede ser null.",
+            "oneOf": [{"type": "string"}, {"type": "null"}]
+          },
+          "coherencia_entre_fuentes": {
+            "type": "string",
+            "description": "Resultado del contraste. Ej: COHERENTE, FUENTE ÚNICA DEL PROMOTOR"
+          },
+          "verificacion_pendiente": {
+            "type": "string"
+          },
+          "nota": {
+            "type": "string"
+          },
+          "tipo_fuente": {
+            "type": "string"
+          }
+        }
+      }
+    },
+
+    "cartografia_trace": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Trazabilidad de cada mapa o capa cartográfica del expediente. Prefijo de ID: CT-.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "titulo", "tipo_cartografia", "archivo_resultado", "estado"],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^CT-\\d{3}$",
+            "description": "Ej: CT-001, CT-009"
+          },
+          "mapa": {
+            "type": "string",
+            "description": "Referencia corta. Ej: MAP-001 — Situación general"
+          },
+          "titulo": {
+            "type": "string",
+            "minLength": 1
+          },
+          "descripcion": {
+            "type": "string"
+          },
+          "tipo_cartografia": {
+            "type": "string",
+            "enum": ["GENERADO_AUTOMATICAMENTE", "VERIFICACION_INTERNA"]
+          },
+          "escala_aprox": {
+            "type": "string",
+            "description": "Ej: 1:80.000"
+          },
+          "CRS_peticion": {
+            "type": "string",
+            "description": "Ej: EPSG:4326 (WGS84)"
+          },
+          "bbox_wgs84": {
+            "type": "object",
+            "properties": {
+              "oeste": {"type": "number"},
+              "sur":   {"type": "number"},
+              "este":  {"type": "number"},
+              "norte": {"type": "number"}
+            }
+          },
+          "bbox_utm28n": {
+            "type": "object",
+            "description": "Bounding box en REGCAN95 UTM 28N (metros).",
+            "properties": {
+              "minX": {"type": "number"},
+              "minY": {"type": "number"},
+              "maxX": {"type": "number"},
+              "maxY": {"type": "number"}
+            }
+          },
+          "servicio": {
+            "type": "object",
+            "properties": {
+              "nombre":  {"type": "string"},
+              "url":     {"type": "string"},
+              "capa":    {"type": "string"},
+              "capas":   {"type": "string"},
+              "version": {"type": "string"}
+            }
+          },
+          "archivo_resultado": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ruta relativa al archivo dentro del expediente."
+          },
+          "formato": {
+            "type": "string",
+            "description": "Ej: PNG, GeoJSON"
+          },
+          "dimensiones_px": {
+            "type": "string",
+            "description": "Ej: 1000 x 700"
+          },
+          "tamano_kb": {
+            "type": "number"
+          },
+          "fecha_descarga": {
+            "type": "string",
+            "description": "ISO 8601. Ej: 2026-04-12T15:09Z"
+          },
+          "estado": {
+            "type": "string",
+            "enum": ["GENERADO", "VERIFICADO", "ERROR", "PENDIENTE"]
+          },
+          "notas":      {"type": "string"},
+          "cautela":    {"type": "string"},
+          "limitacion": {"type": "string"},
+          "advertencia_snczi": {"type": "string"}
+        }
+      }
+    },
+
+    "salidas_generadas": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "description": "Inventario de todos los archivos output del expediente. Prefijo de ID: SG-.",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "fase", "agente", "fecha", "tipo", "nombre_archivo", "descripcion"],
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^SG-\\d{3}$",
+            "description": "Ej: SG-001, SG-035"
+          },
+          "fase": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ej: 1, 4A, 4B, 7, 8, 9"
+          },
+          "agente": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ej: AG-6, M-11, M-12"
+          },
+          "fecha": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "description": "Fecha de generación. AAAA-MM-DD."
+          },
+          "tipo": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Tipo de salida. Ej: PNG — mapa raster, JSON — capa de datos, Markdown — bloque, DOCX — documento final"
+          },
+          "nombre_archivo": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Ruta relativa dentro del expediente."
+          },
+          "descripcion": {
+            "type": "string",
+            "minLength": 1
+          },
+          "estado_evidencia": {
+            "type": "string",
+            "description": "Estado de evidencia del output.",
+            "examples": ["CONFIRMADO", "APROXIMADO — modo test"]
+          },
+          "fuentes": {
+            "type": "array",
+            "items": {"type": "string"}
+          },
+          "notas":      {"type": "string"},
+          "advertencia": {"type": "string"},
+          "CRS":        {"type": "string"}
+        }
+      }
+    }
+
+  },
+
+  "notas_sobre_ficha_objeto_evaluado": {
+    "descripcion": "La ficha del objeto evaluado es un documento Markdown generado por AG-4. Ruta canónica: control_interno/ficha_objeto_evaluado.md",
+    "motivo_no_json": "En el piloto se generó como Markdown tabular. Una versión JSON estructurada es un ítem P1 del backlog (OB-01).",
+    "secciones_minimas_requeridas": [
+      "Identificación del proyecto (nombre, tipo de documento, procedimiento ambiental)",
+      "Promotor y técnico redactor",
+      "Ubicación y delimitación (municipio, isla, RC, coordenadas WGS84, coordenadas UTM REGCAN95 28N, superficie)",
+      "Actividad evaluada — objeto material exacto",
+      "Operaciones incluidas (código legal + código operativo interno)",
+      "Operaciones excluidas",
+      "Residuos admitidos (tabla LER)",
+      "Modo de inventario (GABINETE / CAMPO)",
+      "Pendientes bloqueantes / gaps ALTA",
+      "Estado del gate (CERRADO / ABIERTO)"
+    ]
+  }
+}

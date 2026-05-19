@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Capa 6 — Salidas generadas",
+  "description": "Registro de todos los archivos y documentos producidos durante las fases del expediente. Permite auditar que cada fase produjo las salidas esperadas.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/SalidaItem"
+  },
+  "$defs": {
+    "SalidaItem": {
+      "title": "Salida generada",
+      "type": "object",
+      "required": [
+        "id",
+        "fase",
+        "agente",
+        "fecha",
+        "tipo",
+        "nombre_archivo",
+        "descripcion"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "description": "Identificador. Patron SG-001.",
+          "type": "string",
+          "pattern": "^SG-[0-9]{3}$"
+        },
+        "fase": {
+          "description": "Fase del expediente que genero esta salida. Puede ser string ('Fase 2') o numero (2).",
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "agente": {
+          "description": "Agente o modulo que genero la salida (AG-04, M-11, etc.).",
+          "type": "string",
+          "minLength": 1
+        },
+        "fecha": {
+          "description": "Fecha de generacion en formato YYYY-MM-DD.",
+          "$ref": "common_defs.schema.json#/$defs/FechaISO"
+        },
+        "tipo": {
+          "description": "Tipo funcional de la salida (ficha_objeto_evaluado, nota_encuadre_legal, cartografia, etc.).",
+          "type": "string",
+          "minLength": 1
+        },
+        "nombre_archivo": {
+          "description": "Nombre o ruta relativa del archivo generado.",
+          "type": "string",
+          "minLength": 1
+        },
+        "descripcion": {
+          "description": "Descripcion breve del contenido de la salida.",
+          "type": "string",
+          "minLength": 1
+        },
+        "estado": {
+          "description": "Estado de la salida (GENERADO, GENERADO_MODO_TEST, PROVISIONAL, etc.).",
+          "type": "string"
+        },
+        "archivo": {
+          "description": "Ruta alternativa al archivo (alias de nombre_archivo en algunos expedientes).",
+          "type": "string"
+        },
+        "nota": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

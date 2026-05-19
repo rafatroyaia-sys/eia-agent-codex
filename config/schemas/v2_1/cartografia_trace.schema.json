@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Capa 5 — Trazabilidad cartografica",
+  "description": "Array de entradas cartograficas: verificaciones internas (coordenadas, catastro, encuadre territorial) y mapas generados. Cada entrada registra su origen, estado y ruta del archivo.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/CartografiaItem"
+  },
+  "$defs": {
+    "CartografiaItem": {
+      "title": "Entrada cartografica",
+      "type": "object",
+      "required": [
+        "id",
+        "titulo",
+        "tipo_cartografia",
+        "estado",
+        "archivo_resultado"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "description": "Identificador. Patron CT-001.",
+          "type": "string",
+          "pattern": "^CT-[0-9]{3}$"
+        },
+        "titulo": {
+          "description": "Titulo descriptivo de la entrada cartografica.",
+          "type": "string",
+          "minLength": 3
+        },
+        "tipo_cartografia": {
+          "description": "Tipo de elemento cartografico.",
+          "$ref": "common_defs.schema.json#/$defs/TipoCartografia"
+        },
+        "estado": {
+          "description": "Estado de la entrada.",
+          "$ref": "common_defs.schema.json#/$defs/EstadoCartografia"
+        },
+        "archivo_resultado": {
+          "description": "Ruta relativa al archivo generado, o texto empezando por 'N/A' si no procede.",
+          "type": "string",
+          "minLength": 1
+        },
+        "estado_evidencia": {
+          "description": "Estado de evidencia del dato cartografico (opcional).",
+          "$ref": "common_defs.schema.json#/$defs/EvidenceState"
+        },
+        "fuente": {
+          "description": "Fuente del dato cartografico.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sistema_referencia": {
+          "description": "Sistema de referencia geodesico (WGS84, REGCAN95, etc.).",
+          "type": "string"
+        },
+        "datos": {
+          "description": "Objeto con datos cartograficos especificos (coordenadas, superficies, etc.).",
+          "type": "object"
+        },
+        "nota": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

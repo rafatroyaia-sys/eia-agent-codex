@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Capa 1 — Hechos confirmados",
+  "description": "Array de hechos (observaciones fácticas) extraidos de la documentacion del promotor. Cada hecho lleva estado de evidencia, categoria, campo, valor y fuentes.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/HechoItem"
+  },
+  "$defs": {
+    "HechoItem": {
+      "title": "Hecho confirmado",
+      "type": "object",
+      "required": [
+        "id",
+        "categoria",
+        "campo",
+        "valor",
+        "estado",
+        "fuentes"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "description": "Identificador unico. Patron HC-001 o HC-T001 (test).",
+          "type": "string",
+          "pattern": "^HC(-T)?-?[0-9]{3,4}$"
+        },
+        "categoria": {
+          "description": "Categoria tematica del hecho (promotor, ubicacion, superficie_configuracion, operaciones, etc.).",
+          "type": "string",
+          "minLength": 1
+        },
+        "campo": {
+          "description": "Nombre del campo o dato que se registra.",
+          "type": "string",
+          "minLength": 1
+        },
+        "valor": {
+          "description": "Valor del campo. Puede ser string, numero, booleano, objeto, array o null.",
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "object",
+            "array",
+            "null"
+          ]
+        },
+        "estado": {
+          "description": "Estado de evidencia del hecho.",
+          "$ref": "common_defs.schema.json#/$defs/EvidenceState"
+        },
+        "fuentes": {
+          "description": "Lista de fuentes documentales que respaldan el hecho. Al menos una.",
+          "$ref": "common_defs.schema.json#/$defs/ArrayStringNoVacio"
+        },
+        "nota": {
+          "description": "Nota explicativa opcional.",
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

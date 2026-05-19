@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Capa 4 — Matriz de trazabilidad",
+  "description": "Array de entradas de trazabilidad. Cada entrada vincula un dato clave del expediente con su estado de evidencia, fuente primaria y los HCs o gaps relacionados.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/TrazabilidadItem"
+  },
+  "$defs": {
+    "TrazabilidadItem": {
+      "title": "Entrada de trazabilidad",
+      "type": "object",
+      "required": [
+        "id",
+        "dato",
+        "valor",
+        "estado_evidencia",
+        "fuente_primaria"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "description": "Identificador. Patron TR-001 o TR-T-001 (test).",
+          "type": "string",
+          "pattern": "^TR(-T)?-?[0-9]{3,4}$"
+        },
+        "dato": {
+          "description": "Nombre o descripcion breve del dato registrado.",
+          "type": "string",
+          "minLength": 1
+        },
+        "valor": {
+          "description": "Valor del dato. Puede ser string o null si desconocido.",
+          "type": [
+            "string",
+            "number",
+            "boolean",
+            "null"
+          ]
+        },
+        "estado_evidencia": {
+          "description": "Estado de evidencia del dato.",
+          "$ref": "common_defs.schema.json#/$defs/EvidenceState"
+        },
+        "fuente_primaria": {
+          "description": "Referencia a la fuente documental primaria.",
+          "type": "string",
+          "minLength": 1
+        },
+        "hc_ids": {
+          "description": "IDs de hechos confirmados relacionados. Puede estar vacio.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "gap_relacionado": {
+          "description": "ID del gap o contradiccion relacionado, si existe.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "nota": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}

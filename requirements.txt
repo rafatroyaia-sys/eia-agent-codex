@@ -1,0 +1,35 @@
+# requirements.txt — EIA-Agent v2.1
+# Dependencias del proyecto proyecto-eia
+# Actualizado: 2026-04-20 — INST-01
+#
+# Para instalar:
+#   pip install -r requirements.txt
+# O usa el instalador:
+#   python scripts/setup_env.py
+
+# ── Documentos Word (ensamblador DOCX M-11) ───────────────────────────────
+python-docx >= 1.1.0
+
+# ── Validación de esquemas JSON (NL-01/NL-02) ─────────────────────────────
+jsonschema >= 4.17.0
+
+# ── HTTP / APIs externas (AEMET, WMS cartografía) ─────────────────────────
+requests >= 2.28.0
+
+# ── Variables de entorno (.env) ───────────────────────────────────────────
+python-dotenv >= 1.0.0
+
+# ── Gráficos y cartografía (climograma, mapas) ────────────────────────────
+matplotlib >= 3.7.0
+
+# ── Plantillas de texto (templates de bloques, fichas) ────────────────────
+jinja2 >= 3.1.0
+
+# ── Imagen (mapas esquemáticos, PNG para DOCX) ────────────────────────────
+Pillow >= 10.0.0
+
+# ── Lectura de PDFs del promotor (IN-04, AG-01) ───────────────────────────
+pdfplumber >= 0.9.0
+
+# ── XML / DOCX internals (dependencia de python-docx) ────────────────────
+lxml >= 4.9.0

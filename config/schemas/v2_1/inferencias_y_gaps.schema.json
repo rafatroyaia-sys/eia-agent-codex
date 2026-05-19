@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Capa 2 — Inferencias y gaps",
+  "description": "Array de items heterogeneos: gaps documentales, contradicciones, inferencias tecnicas y cautelas. Cada item tiene id, tipo, criticidad y campo.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/InferenciaGapItem"
+  },
+  "$defs": {
+    "TipoInferenciaGap": {
+      "title": "Tipo de item de inferencias/gaps",
+      "description": "Valores detectados en ambos pilotos. Mezcla de mayusculas y minusculas segun origen.",
+      "type": "string",
+      "enum": [
+        "CONTRADICCION",
+        "CONTRADICCIÓN",
+        "CONTRADICCION_RESUELTA_PROVISIONALMENTE",
+        "CONTRADICCIÓN_RESUELTA_PROVISIONALMENTE",
+        "PENDIENTE_NO_BLOQUEANTE_TEST",
+        "gap_documental",
+        "gap_dato_tecnico",
+        "gap_administrativo",
+        "gap_contradiccion_documental",
+        "gap_flujo_residuos",
+        "inferencia",
+        "contradiccion_documental",
+        "cautela",
+        "CAUTELA_FASE3",
+        "CERRADO_PARCIALMENTE_FASE3",
+        "PUNTO_SENSIBLE_FASE2",
+        "INFERIDO",
+        "PENDIENTE"
+      ]
+    },
+    "CriticidadFlexible": {
+      "title": "Criticidad — admite valores canonicos y compuestos con nota",
+      "description": "Puede ser un valor canonico o un string compuesto como 'CRITICA' o 'MEDIA -- no bloqueante en modo test' o 'RESUELTO'.",
+      "type": "string",
+      "minLength": 1
+    },
+    "InferenciaGapItem": {
+      "title": "Item de inferencias y gaps",
+      "type": "object",
+      "required": [
+        "id",
+        "tipo",
+        "criticidad",
+        "campo"
+      ],
+      "additionalProperties": true,
+      "properties": {
+        "id": {
+          "description": "Identificador del item. Admite CONT-001, GAP-001, INF-001, PS-INF-001, CAUTELA-001, CAUTELA-N222-001, GAP-INV-001.",
+          "type": "string",
+          "pattern": "^(CONT|GAP|INF|PS-INF|CAUTELA|GAP-INV)(-[A-Z0-9]+)?-[0-9]{3,4}(-[A-Z0-9]+)?$"
+        },
+        "tipo": {
+          "description": "Tipo de item (gap, inferencia, contradiccion, cautela...).",
+          "$ref": "#/$defs/TipoInferenciaGap"
+        },
+        "criticidad": {
+          "description": "Nivel de criticidad. Puede ser un valor canonico o compuesto con nota.",
+          "$ref": "#/$defs/CriticidadFlexible"
+        },
+        "campo": {
+          "description": "Campo o dato al que se refiere el item.",
+          "type": "string",
+          "minLength": 1
+        },
+        "descripcion": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "estado": {
+          "description": "Estado de evidencia si aplica.",
+          "$ref": "common_defs.schema.json#/$defs/EvidenceState"
+        },
+        "fuente": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fuentes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "nota": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    }
+  }
+}
