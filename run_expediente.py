@@ -1222,6 +1222,36 @@ def cmd_audit_diagnostic_measures(exp_path: Path, write: bool) -> int:
     return 0 if result.is_valid() else 1
 
 
+def cmd_document_insert_figures(exp_path: Path, write: bool) -> int:
+    """Localiza figuras del expediente e inserta en DOCX DOC-02 (DOC-03)."""
+    from eia_agent.core.document_figure_inserter import insert_figures_into_document
+
+    try:
+        result = insert_figures_into_document(exp_path, write_outputs=write)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en document-insert-figures: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if result.warnings:
+        print()
+        for w in result.warnings[:10]:
+            print(f"  [AVISO] {w}")
+
+    if write and result.is_success():
+        doc_dir = exp_path / "documento"
+        print(f"\nOutputs escritos:")
+        print(f"  {doc_dir / 'documento_ambiental_borrador_con_figuras.docx'}")
+        print(f"  {doc_dir / 'document_figures_result.json'}")
+        print(f"  {doc_dir / 'document_figures_result.md'}")
+
+    return 0
+
+
 def cmd_document_build_docx(exp_path: Path, write: bool) -> int:
     """Genera el DOCX del Documento Ambiental desde el Markdown DOC-01 (DOC-02)."""
     from eia_agent.core.document_docx_builder import build_docx_from_expediente
@@ -1953,6 +1983,22 @@ Ejemplos:
         ),
     )
 
+    doc03_p = sub.add_parser(
+        "document-insert-figures",
+        help=(
+            "Insertar figuras, mapas y climogramas en DOCX (DOC-03). "
+            "Requiere documento/documento_ambiental_borrador.docx generado por DOC-02."
+        ),
+    )
+    doc03_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir documento/documento_ambiental_borrador_con_figuras.docx, "
+            "document_figures_result.json y document_figures_result.md"
+        ),
+    )
+
     return parser
 
 
@@ -2045,6 +2091,8 @@ def main(argv=None) -> int:
         return cmd_document_build_md(exp_path, args.write)
     if args.command == "document-build-docx":
         return cmd_document_build_docx(exp_path, args.write)
+    if args.command == "document-insert-figures":
+        return cmd_document_insert_figures(exp_path, args.write)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()
