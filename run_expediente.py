@@ -11,7 +11,8 @@ Proporciona acceso desde consola a los módulos de productización:
   phase6-actions, phase6-identify-impacts, phase6-assign-conesa,
   phase6-generate-measures, phase6-generate-pva,
   phase6-validate-pva, phase6-cumulative, audit-art45, audit-prudence,
-  document-manifest, document-build-md.
+  document-manifest, document-build-md, document-build-docx,
+  document-insert-figures, document-qc.
 
 Uso:
     python run_expediente.py <expediente> status
@@ -1222,6 +1223,35 @@ def cmd_audit_diagnostic_measures(exp_path: Path, write: bool) -> int:
     return 0 if result.is_valid() else 1
 
 
+def cmd_document_qc(exp_path: Path, write: bool) -> int:
+    """Control de calidad del paquete documental final (DOC-04)."""
+    from eia_agent.core.document_quality_checker import (
+        run_document_quality_check,
+        write_document_quality_outputs,
+    )
+
+    try:
+        result = run_document_quality_check(exp_path)
+    except Exception as exc:
+        print(f"Error en document-qc: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        out_dir = exp_path / "documento"
+        try:
+            json_path, md_path = write_document_quality_outputs(result, out_dir)
+            print("Outputs escritos:")
+            print(f"  {json_path}")
+            print(f"  {md_path}")
+        except Exception as exc:
+            print(f"Error escribiendo outputs: {exc}", file=sys.stderr)
+            return 1
+
+    return 0 if result.is_valid() else 1
+
+
 def cmd_document_insert_figures(exp_path: Path, write: bool) -> int:
     """Localiza figuras del expediente e inserta en DOCX DOC-02 (DOC-03)."""
     from eia_agent.core.document_figure_inserter import insert_figures_into_document
@@ -1983,6 +2013,22 @@ Ejemplos:
         ),
     )
 
+    doc04_p = sub.add_parser(
+        "document-qc",
+        help=(
+            "Control de calidad del paquete documental final (DOC-04). "
+            "Verifica completitud, bloques A-K, disclaimer y coherencia."
+        ),
+    )
+    doc04_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir documento/document_quality_result.json y "
+            "documento/document_quality_result.md"
+        ),
+    )
+
     doc03_p = sub.add_parser(
         "document-insert-figures",
         help=(
@@ -2093,6 +2139,8 @@ def main(argv=None) -> int:
         return cmd_document_build_docx(exp_path, args.write)
     if args.command == "document-insert-figures":
         return cmd_document_insert_figures(exp_path, args.write)
+    if args.command == "document-qc":
+        return cmd_document_qc(exp_path, args.write)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()
