@@ -44,6 +44,7 @@ FIGURE_TYPES: list[str] = [
 
 # Directorios donde buscar figuras (rutas relativas al expediente)
 FIGURE_SOURCE_DIRS: list[str] = [
+    "mapas",
     "cartografia",
     "cartografia/mapas",
     "clima",

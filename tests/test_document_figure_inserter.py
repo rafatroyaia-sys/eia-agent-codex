@@ -357,6 +357,15 @@ class TestDiscoverDocumentFigures(unittest.TestCase):
         self.assertIn("FIG-002", ids)
         self.assertIn("FIG-003", ids)
 
+    def test_finds_png_in_mapas_root(self):
+        # Correccion QA-05: mapas/ en raiz del expediente (NAVE-222)
+        mapas = self.exp / "mapas"
+        mapas.mkdir()
+        _make_png(mapas / "MAP-001_situacion_general.png")
+        figs = discover_document_figures(self.exp)
+        self.assertEqual(len(figs), 1)
+        self.assertEqual(figs[0].figure_type, "MAPA")
+
     def test_mapa_before_climograma(self):
         cart = self.exp / "cartografia"
         cart.mkdir()

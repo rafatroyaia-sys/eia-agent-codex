@@ -245,9 +245,10 @@ Ver sección §4 del informe de normalización adjunto (`cierre_normalizacion_ba
 | DOC-01 | Generador Markdown del Documento Ambiental | ✅ **COMPLETADO** | 2026-05-18 | `document_markdown_builder.py`, 108 tests, CLI `document-build-md` |
 | DOC-02 | Generador DOCX del Documento Ambiental | ✅ **COMPLETADO** | 2026-05-19 | `document_docx_builder.py`, 99 tests, CLI `document-build-docx` |
 | QA-04 | Prueba end-to-end generacion documental | ✅ **COMPLETADO** | 2026-05-20 | 11/11 READY, DOCX 1,35 MB, 0 bugs. `qa04_prueba_generacion_documental.md` |
-| DOC-03 | Insercion de figuras en DOCX | ✅ **COMPLETADO** | 2026-05-20 | `document_figure_inserter.py`, 89 tests, CLI `document-insert-figures` |
+| DOC-03 | Insercion de figuras en DOCX | ✅ **COMPLETADO** | 2026-05-20 | `document_figure_inserter.py`, 90 tests (bug fix QA-05), CLI `document-insert-figures` |
+| QA-05 | Prueba end-to-end figuras reales NAVE-222 | ✅ **COMPLETADO** | 2026-05-20 | 6/6 mapas, DOCX 1380→1715 KB, 6 captions verificados, suite 5841 OK |
 
 ---
 
 *Matriz maestra creada 2026-04-19 — normalización pre-P1 código*  
-*Actualizada 2026-05-18 — ítems DOC-00 y DOC-01 añadidos*
+*Actualizada 2026-05-20 — ítems DOC-03 y QA-05 añadidos*
