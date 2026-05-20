@@ -1222,6 +1222,35 @@ def cmd_audit_diagnostic_measures(exp_path: Path, write: bool) -> int:
     return 0 if result.is_valid() else 1
 
 
+def cmd_document_build_docx(exp_path: Path, write: bool) -> int:
+    """Genera el DOCX del Documento Ambiental desde el Markdown DOC-01 (DOC-02)."""
+    from eia_agent.core.document_docx_builder import build_docx_from_expediente
+
+    try:
+        result = build_docx_from_expediente(exp_path, write_outputs=write)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en document-build-docx: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if result.warnings:
+        print()
+        for w in result.warnings[:10]:
+            print(f"  [AVISO] {w.summary()}")
+
+    if write and result.generated:
+        doc_dir = exp_path / "documento"
+        print(f"\nOutputs escritos:")
+        print(f"  {doc_dir / 'documento_ambiental_borrador.docx'}")
+        print(f"  {doc_dir / 'docx_build_result.json'}")
+
+    return 0 if result.is_success() or not write else 1
+
+
 def cmd_document_build_md(exp_path: Path, write: bool) -> int:
     """Genera el borrador Markdown del Documento Ambiental (DOC-01)."""
     from eia_agent.core.document_markdown_builder import build_document_markdown
@@ -1908,6 +1937,22 @@ Ejemplos:
         ),
     )
 
+    doc02_p = sub.add_parser(
+        "document-build-docx",
+        help=(
+            "Convertir borrador Markdown a DOCX profesional (DOC-02). "
+            "Requiere documento/documento_ambiental_borrador.md generado por DOC-01."
+        ),
+    )
+    doc02_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir documento/documento_ambiental_borrador.docx y "
+            "documento/docx_build_result.json"
+        ),
+    )
+
     return parser
 
 
@@ -1998,6 +2043,8 @@ def main(argv=None) -> int:
         return cmd_document_manifest(exp_path, args.write)
     if args.command == "document-build-md":
         return cmd_document_build_md(exp_path, args.write)
+    if args.command == "document-build-docx":
+        return cmd_document_build_docx(exp_path, args.write)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()
