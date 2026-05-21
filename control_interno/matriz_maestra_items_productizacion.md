@@ -248,8 +248,9 @@ Ver sección §4 del informe de normalización adjunto (`cierre_normalizacion_ba
 | DOC-03 | Insercion de figuras en DOCX | ✅ **COMPLETADO** | 2026-05-20 | `document_figure_inserter.py`, 90 tests (bug fix QA-05), CLI `document-insert-figures` |
 | QA-05 | Prueba end-to-end figuras reales NAVE-222 | ✅ **COMPLETADO** | 2026-05-20 | 6/6 mapas, DOCX 1380→1715 KB, 6 captions verificados, suite 5841 OK |
 | DOC-04 | Control de calidad paquete documental | ✅ **COMPLETADO** | 2026-05-20 | `document_quality_checker.py`, 118 tests, CLI `document-qc`, suite 5960 OK |
+| QA-06 | Prueba real QC documental DOCX enriquecido | ✅ **COMPLETADO** | 2026-05-21 | 11/11 archivos, A-K 11/11, FIG-001..FIG-006, QC-E006 real documentado, suite 5960 OK |
 
 ---
 
 *Matriz maestra creada 2026-04-19 — normalización pre-P1 código*  
-*Actualizada 2026-05-20 — ítems DOC-03, QA-05, DOC-04 añadidos*
+*Actualizada 2026-05-21 — ítem QA-06 añadido*
