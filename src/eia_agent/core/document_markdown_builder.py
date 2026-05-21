@@ -1431,12 +1431,30 @@ def build_block_i(exp_path: "str | Path", manifest_item: Any) -> DocumentBlockBu
 
         if audit_status == "NO_CONFORME":
             lines.append(
-                "\n> **AVISO:** El estado de auditoria es NO_CONFORME. "
-                "Este expediente no puede considerarse completo para presentacion "
-                "sin resolver las incidencias BLOQUEANTE/ALTA identificadas.\n"
+                "\n> **AVISO DE AUDITORIA FINAL:** El informe final de auditoria "
+                "interna califica el expediente como NO CONFORME "
+                "(estado interno: `NO_CONFORME`). "
+                "Las incidencias detectadas deben resolverse antes de "
+                "iniciar cualquier tramite administrativo.\n"
             )
             warnings.append(
-                "Auditoria final NO_CONFORME. Revisar incidencias antes de presentar."
+                "Auditoria final NO CONFORME. Revisar incidencias antes de tramitar."
+            )
+        elif audit_status in ("CONFORME_CON_OBSERVACIONES", "CON_OBSERVACIONES"):
+            lines.append(
+                "\n> **AVISO:** El expediente presenta observaciones internas "
+                "que deben revisarse antes de su uso administrativo.\n"
+            )
+        elif audit_status == "INCOMPLETO":
+            lines.append(
+                "\n> **AVISO DE AUDITORIA FINAL:** La auditoria interna esta "
+                "INCOMPLETA. Faltan controles o evidencias antes de considerar "
+                "el documento como cerrable.\n"
+            )
+        elif audit_status == "CONFORME":
+            lines.append(
+                "\n> **Nota:** La calificacion CONFORME es interna y no equivale "
+                "a aptitud administrativa.\n"
             )
 
         # Agrupar por severidad
@@ -1668,13 +1686,22 @@ def build_block_j(exp_path: "str | Path", manifest_item: Any) -> DocumentBlockBu
             f"El estado interno de la auditoria de este documento es: "
             f"**{audit_status}**. "
         )
-        if audit_status in ("NO_CONFORME", "INCOMPLETO"):
+        if audit_status == "NO_CONFORME":
             lines.append(
-                "Este documento tiene incidencias pendientes de resolver. "
-                "No puede presentarse en su estado actual.\n"
+                "La revision interna automatica ha detectado incidencias pendientes. "
+                "El documento no debe considerarse cerrado ni completado "
+                "hasta resolver dichas incidencias.\n"
             )
             warnings.append(
-                f"Auditoria {audit_status}: el resumen no tecnico refleja este estado."
+                "Auditoria NO CONFORME en bloque J: el resumen no tecnico refleja este estado."
+            )
+        elif audit_status == "INCOMPLETO":
+            lines.append(
+                "No consta auditoria final interna completa. "
+                "El documento no debe considerarse cerrado.\n"
+            )
+            warnings.append(
+                "Auditoria INCOMPLETA en bloque J: el resumen no tecnico refleja este estado."
             )
         else:
             lines.append(

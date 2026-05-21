@@ -752,6 +752,65 @@ class TestCheckFinalAuditVisibility(unittest.TestCase):
         errors = [i for i in issues if i.code == "QC-E006"]
         self.assertEqual(len(errors), 0)
 
+    # --- DOC-05: tests de integracion con texto generado por DOC-01 ---
+
+    def test_no_conforme_with_space_in_docx_no_qce006(self):
+        """DOCX con 'NO CONFORME' (espacio) → QC lo detecta, sin QC-E006."""
+        exp = self._exp()
+        (exp / "auditoria").mkdir(parents=True, exist_ok=True)
+        doc_dir = exp / "documento"
+        doc_dir.mkdir(exist_ok=True)
+        _write_json(exp / "auditoria" / "final_audit_result.json", {
+            "status": "NO_CONFORME",
+            "administrative_ready": False,
+        })
+        _make_minimal_docx(
+            doc_dir / "documento_ambiental_borrador.docx",
+            paragraphs=[
+                "AVISO DE AUDITORIA FINAL: califica el expediente como NO CONFORME.",
+                "Este borrador no debe considerarse apto para presentacion administrativa.",
+            ],
+        )
+        issues = check_final_audit_visibility(exp)
+        errors = [i for i in issues if i.code == "QC-E006"]
+        self.assertEqual(len(errors), 0)
+
+    def test_no_conforme_with_underscore_in_docx_no_qce006(self):
+        """DOCX con 'NO_CONFORME' (guion bajo) tambien es detectado (DOC-04 resiliente)."""
+        exp = self._exp()
+        (exp / "auditoria").mkdir(parents=True, exist_ok=True)
+        doc_dir = exp / "documento"
+        doc_dir.mkdir(exist_ok=True)
+        _write_json(exp / "auditoria" / "final_audit_result.json", {
+            "status": "NO_CONFORME",
+            "administrative_ready": False,
+        })
+        _make_minimal_docx(
+            doc_dir / "documento_ambiental_borrador.docx",
+            paragraphs=["Estado de auditoria (AU-04): NO_CONFORME"],
+        )
+        issues = check_final_audit_visibility(exp)
+        errors = [i for i in issues if i.code == "QC-E006"]
+        self.assertEqual(len(errors), 0)
+
+    def test_no_conforme_with_observacion_in_docx_no_qce006(self):
+        """'observacion' en DOCX tambien satisface la visibilidad."""
+        exp = self._exp()
+        (exp / "auditoria").mkdir(parents=True, exist_ok=True)
+        doc_dir = exp / "documento"
+        doc_dir.mkdir(exist_ok=True)
+        _write_json(exp / "auditoria" / "final_audit_result.json", {
+            "status": "NO_CONFORME",
+            "administrative_ready": False,
+        })
+        _make_minimal_docx(
+            doc_dir / "documento_ambiental_borrador.docx",
+            paragraphs=["El expediente tiene observaciones pendientes de resolver."],
+        )
+        issues = check_final_audit_visibility(exp)
+        errors = [i for i in issues if i.code == "QC-E006"]
+        self.assertEqual(len(errors), 0)
+
 
 # ---------------------------------------------------------------------------
 # 11. check_no_administrative_ready_claim

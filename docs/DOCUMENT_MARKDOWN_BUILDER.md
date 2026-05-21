@@ -2,7 +2,7 @@
 
 Módulo: `src/eia_agent/core/document_markdown_builder.py`  
 CLI: `python run_expediente.py <expediente> document-build-md [--write]`  
-Tests: `tests/test_document_markdown_builder.py` (108 tests)
+Tests: `tests/test_document_markdown_builder.py` (126 tests — +18 DOC-05)
 
 ---
 
@@ -181,6 +181,33 @@ Métodos: `generated_count()`, `partial_count()`, `missing_count()`,
    - "se descarta"
    - "todos compatibles"
 7. **Bloque G siempre PARTIAL**: en modo gabinete las alternativas requieren datos del promotor.
+8. **Bloque I propaga estado de auditoría final (DOC-05)**: si `auditoria/final_audit_result.json`
+   existe, el Bloque I muestra el estado (`NO CONFORME`, `CONFORME_CON_OBSERVACIONES`, etc.)
+   con un aviso según la severidad. El aviso para `NO CONFORME` usa la frase exacta
+   "NO CONFORME" (con espacio) para que el QC-E006 de DOC-04 pueda detectarlo.
+9. **Frases prohibidas en bloques I y J**: los avisos de auditoría nunca usan:
+   - "apto para presentacion administrativa"
+   - "listo para presentar"
+   - cualquier declaración afirmativa de aptitud.
+
+---
+
+## Propagación del estado de auditoría final (DOC-05)
+
+Cuando `auditoria/final_audit_result.json` existe, `build_block_i` incluye:
+
+| Estado | Aviso generado en Bloque I |
+|--------|---------------------------|
+| `NO_CONFORME` | AVISO DE AUDITORIA FINAL: califica como NO CONFORME (detectable por QC-E006) |
+| `CONFORME_CON_OBSERVACIONES` | AVISO: observaciones internas pendientes de revisión |
+| `INCOMPLETO` | AVISO: auditoría INCOMPLETA |
+| `CONFORME` | Nota: calificación interna, no equivale a aptitud administrativa |
+
+`build_block_j` (sección J.6) también refleja el estado:
+- `NO_CONFORME` → aviso de incidencias pendientes
+- `INCOMPLETO` → aviso de auditoría incompleta
+
+Esta propagación permite que DOC-04 verifique la visibilidad con `QC-E006` sin generar `QC-E008` (frases prohibidas).
 
 ---
 

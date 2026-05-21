@@ -202,6 +202,9 @@ documental real con DOCX enriquecido:
   el documento (QC-E006) — comportamiento correcto del validador.
 - No modifico ningun archivo fuente.
 
-**Gap documentado:** DOC-01 no propaga el estado de `final_audit_result.status`
-al cuerpo del Documento Ambiental. Esta es una limitacion conocida del modo gabinete
-y queda registrada para una futura mejora de DOC-01.
+**Gap documentado:** DOC-01 no propagaba el estado de `final_audit_result.status`
+al cuerpo del Documento Ambiental. Esta limitacion fue corregida en DOC-05 (2026-05-21).
+
+**Correccion DOC-05:** `build_block_i` ahora escribe "NO CONFORME" (con espacio, detectable por
+`check_final_audit_visibility`) + aviso prescrito para cada estado de auditoria. La prueba real
+post-DOC-05 devuelve QC status OK (0 errores, 0 advertencias).

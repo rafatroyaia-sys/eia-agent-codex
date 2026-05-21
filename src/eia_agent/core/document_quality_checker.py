@@ -595,13 +595,13 @@ def check_final_audit_visibility(
 
             if docx_path and docx_path.exists():
                 docx_text = _normalize_text(extract_docx_text(docx_path))
-                if any(kw in docx_text for kw in ["no conforme", "noconforme", "observacion", "con observaciones"]):
+                if any(kw in docx_text for kw in ["no conforme", "noconforme", "no_conforme", "observacion", "con observaciones"]):
                     visible = True
 
             if not visible and md_path.exists():
                 try:
                     md_text = _normalize_text(md_path.read_text(encoding="utf-8"))
-                    if any(kw in md_text for kw in ["no conforme", "noconforme", "observacion", "con observaciones"]):
+                    if any(kw in md_text for kw in ["no conforme", "noconforme", "no_conforme", "observacion", "con observaciones"]):
                         visible = True
                 except Exception:
                     pass

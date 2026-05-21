@@ -1152,6 +1152,158 @@ class TestNoInventedData(unittest.TestCase):
 # 10. Tests de constantes y estructura
 # ---------------------------------------------------------------------------
 
+
+# ---------------------------------------------------------------------------
+# 11. Tests DOC-05 — visibilidad de auditoria final (bloques I y J)
+# ---------------------------------------------------------------------------
+
+class TestAuditVisibilityDOC05(unittest.TestCase):
+    """Verifica que build_block_i y build_block_j reflejan el estado de auditoria."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _exp_with_audit(self, status: str) -> Path:
+        """Expediente minimo con final_audit_result.json del status indicado."""
+        exp = self.tmp / f"exp-{status.lower()}"
+        exp.mkdir(parents=True, exist_ok=True)
+        aud = exp / "auditoria"
+        aud.mkdir(exist_ok=True)
+        audit_data = {
+            "status": status,
+            "issues": [{"severity": "ALTA", "code": "X-001", "message": "Incidencia test"}],
+            "administrative_ready": False,
+        }
+        (aud / "final_audit_result.json").write_text(
+            json.dumps(audit_data, ensure_ascii=False), encoding="utf-8"
+        )
+        return exp
+
+    # --- block I: NO_CONFORME ---
+
+    def test_block_i_no_conforme_contains_phrase_with_space(self):
+        exp = self._exp_with_audit("NO_CONFORME")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        # "NO CONFORME" con espacio → detectable por QC-E006
+        self.assertIn("NO CONFORME", result.markdown)
+
+    def test_block_i_no_conforme_contains_aviso_de_auditoria(self):
+        exp = self._exp_with_audit("NO_CONFORME")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIn("AVISO DE AUDITORIA FINAL", result.markdown)
+
+    def test_block_i_no_conforme_no_apto_phrase(self):
+        exp = self._exp_with_audit("NO_CONFORME")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        md_lower = result.markdown.lower()
+        # No debe haber declaracion afirmativa de aptitud
+        self.assertNotIn("apto administrativamente", md_lower)
+        self.assertNotIn("listo para presentar", md_lower)
+
+    def test_block_i_no_conforme_mentions_tramite(self):
+        exp = self._exp_with_audit("NO_CONFORME")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        # Debe mencionar la imposibilidad de tramitar o resolver incidencias
+        md_lower = result.markdown.lower()
+        self.assertTrue(
+            "tramite" in md_lower or "incidencias" in md_lower,
+            "El AVISO debe mencionar tramite o incidencias"
+        )
+
+    def test_block_i_no_conforme_no_prohibited_phrases(self):
+        exp = self._exp_with_audit("NO_CONFORME")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        md_lower = result.markdown.lower()
+        self.assertNotIn("apto para presentacion administrativa", md_lower)
+        self.assertNotIn("listo para presentar", md_lower)
+
+    def test_block_i_no_conforme_has_warning(self):
+        exp = self._exp_with_audit("NO_CONFORME")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertTrue(len(result.warnings) > 0)
+
+    # --- block I: CONFORME_CON_OBSERVACIONES ---
+
+    def test_block_i_conforme_con_observaciones_has_aviso(self):
+        exp = self._exp_with_audit("CONFORME_CON_OBSERVACIONES")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIn("observaciones", result.markdown.lower())
+
+    def test_block_i_conforme_con_observaciones_status_visible(self):
+        exp = self._exp_with_audit("CONFORME_CON_OBSERVACIONES")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIn("CONFORME_CON_OBSERVACIONES", result.markdown)
+
+    # --- block I: INCOMPLETO ---
+
+    def test_block_i_incompleto_has_aviso(self):
+        exp = self._exp_with_audit("INCOMPLETO")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIn("INCOMPLETA", result.markdown)
+
+    # --- block I: CONFORME ---
+
+    def test_block_i_conforme_mentions_not_admin_equiv(self):
+        exp = self._exp_with_audit("CONFORME")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIn("no equivale a aptitud administrativa", result.markdown.lower())
+
+    # --- block I: sin audit-final ---
+
+    def test_block_i_no_audit_no_crash(self):
+        exp = self.tmp / "exp-no-audit"
+        exp.mkdir(parents=True, exist_ok=True)
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIsNotNone(result)
+        self.assertIn("I", result.block_id)
+
+    def test_block_i_no_audit_mentions_not_available(self):
+        exp = self.tmp / "exp-no-audit2"
+        exp.mkdir(parents=True, exist_ok=True)
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIn("No disponible", result.markdown)
+
+    # --- block J: NO_CONFORME ---
+
+    def test_block_j_no_conforme_contains_incidencias_pendientes(self):
+        exp = self._exp_with_audit("NO_CONFORME")
+        result = build_block_j(exp, _FakeManifestItem("J"))
+        self.assertIn("incidencias pendientes", result.markdown.lower())
+
+    def test_block_j_no_conforme_no_debe_considerarse(self):
+        exp = self._exp_with_audit("NO_CONFORME")
+        result = build_block_j(exp, _FakeManifestItem("J"))
+        self.assertIn("no debe considerarse", result.markdown.lower())
+
+    def test_block_j_no_conforme_has_warning(self):
+        exp = self._exp_with_audit("NO_CONFORME")
+        result = build_block_j(exp, _FakeManifestItem("J"))
+        self.assertTrue(len(result.warnings) > 0)
+
+    # --- block J: sin audit-final ---
+
+    def test_block_j_no_audit_shows_fallback(self):
+        exp = self.tmp / "exp-j-no-audit"
+        exp.mkdir(parents=True, exist_ok=True)
+        result = build_block_j(exp, _FakeManifestItem("J"))
+        self.assertIsNotNone(result)
+
+    # --- full document ---
+
+    def test_full_doc_no_conforme_contains_detectable_phrase(self):
+        """El Markdown completo con audit NO_CONFORME contiene 'NO CONFORME' (espacio)."""
+        import unicodedata
+        exp = self._exp_with_audit("NO_CONFORME")
+        from eia_agent.core.document_markdown_builder import build_document_markdown
+        result = build_document_markdown(exp, write_outputs=False)
+        full_md = assemble_document_markdown(result.blocks)
+        norm = unicodedata.normalize("NFKD", full_md.lower()).encode("ascii", "ignore").decode("ascii")
+        self.assertIn("no conforme", norm)
+
 class TestConstants(unittest.TestCase):
 
     def test_block_order_has_11_blocks(self):

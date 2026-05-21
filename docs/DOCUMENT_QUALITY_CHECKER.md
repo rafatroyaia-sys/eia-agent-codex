@@ -54,8 +54,13 @@ enriquecido no existe → WARNING.
 ### 4. Auditoria final
 
 - Si `auditoria/final_audit_result.json` no existe → WARNING.
-- Si `status == NO_CONFORME` y el documento no lo menciona → ERROR.
-- Si cualquier JSON del paquete tiene `administrative_ready: true` → ERROR.
+- Si `status == NO_CONFORME` y el documento no lo menciona → ERROR (`QC-E006`).
+- Si cualquier JSON del paquete tiene `administrative_ready: true` → ERROR (`QC-E007`).
+
+**Deteccion de visibilidad (QC-E006):** busca en el texto del DOCX/MD las cadenas
+`no conforme` (espacio), `noconforme`, `no_conforme` (guion bajo), `observacion`,
+`con observaciones`. DOC-01 (desde DOC-05) escribe "NO CONFORME" con espacio en
+el Bloque I para satisfacer esta comprobacion.
 
 ### 5. Frases prohibidas
 
