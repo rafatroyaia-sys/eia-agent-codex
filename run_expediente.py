@@ -12,7 +12,7 @@ Proporciona acceso desde consola a los módulos de productización:
   phase6-generate-measures, phase6-generate-pva,
   phase6-validate-pva, phase6-cumulative, audit-art45, audit-prudence,
   document-manifest, document-build-md, document-build-docx,
-  document-insert-figures, document-qc, document-package.
+  document-insert-figures, document-qc, document-package, document-export.
 
 Uso:
     python run_expediente.py <expediente> status
@@ -36,6 +36,7 @@ Uso:
     python run_expediente.py <expediente> phase6-generate-measures [--write]
     python run_expediente.py <expediente> phase6-generate-pva [--write]
     python run_expediente.py <expediente> document-package [--write] [--overwrite]
+    python run_expediente.py <expediente> document-export [--write] [--no-pdf] [--overwrite]
 """
 import argparse
 import sys
@@ -1224,6 +1225,48 @@ def cmd_audit_diagnostic_measures(exp_path: Path, write: bool) -> int:
     return 0 if result.is_valid() else 1
 
 
+def cmd_document_export(
+    exp_path: Path, write: bool, generate_pdf: bool, overwrite: bool
+) -> int:
+    """Exporta el paquete de entrega a ZIP y opcionalmente PDF (DOC-07)."""
+    from eia_agent.core.document_exporter import (
+        export_document_package,
+        write_export_result_outputs,
+    )
+
+    try:
+        result = export_document_package(
+            exp_path,
+            write_outputs=write,
+            generate_pdf=generate_pdf,
+            overwrite=overwrite,
+        )
+    except Exception as exc:
+        print(f"Error en document-export: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        doc_dir = exp_path / "documento"
+        try:
+            json_path, md_path = write_export_result_outputs(result, doc_dir)
+            print(f"\nOutputs escritos:")
+            if result.zip_path:
+                print(f"  {result.zip_path}")
+            if result.pdf_path:
+                print(f"  {result.pdf_path}")
+            print(f"  {json_path}")
+            print(f"  {md_path}")
+        except Exception as exc:
+            print(f"Error escribiendo outputs: {exc}", file=sys.stderr)
+            return 1
+
+    # exit 0 si no hay ERRORs (tanto en dry-run como en write)
+    # falta de conversor PDF no da exit 1 si paquete_entrega/ existe
+    return 0 if result.error_count() == 0 else 1
+
+
 def cmd_document_package(exp_path: Path, write: bool, overwrite: bool) -> int:
     """Empaqueta los outputs del Documento Ambiental en paquete_entrega/ (DOC-06)."""
     from eia_agent.core.document_package_builder import (
@@ -2102,6 +2145,34 @@ Ejemplos:
         ),
     )
 
+    doc07_p = sub.add_parser(
+        "document-export",
+        help=(
+            "Exportar paquete_entrega/ a ZIP y opcionalmente a PDF (DOC-07). "
+            "Sin --write solo muestra que se exportaria."
+        ),
+    )
+    doc07_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Crear documento/paquete_entrega.zip "
+            "e intentar PDF. Escribe document_export_result.json y .md."
+        ),
+    )
+    doc07_p.add_argument(
+        "--no-pdf",
+        action="store_true",
+        dest="no_pdf",
+        help="Solo ZIP; no intentar exportacion PDF.",
+    )
+    doc07_p.add_argument(
+        "--overwrite",
+        action="store_true",
+        default=True,
+        help="Sobreescribir ZIP existente (comportamiento por defecto).",
+    )
+
     return parser
 
 
@@ -2201,6 +2272,10 @@ def main(argv=None) -> int:
     if args.command == "document-package":
         overwrite = getattr(args, "overwrite", True)
         return cmd_document_package(exp_path, args.write, overwrite)
+    if args.command == "document-export":
+        overwrite = getattr(args, "overwrite", True)
+        generate_pdf = not getattr(args, "no_pdf", False)
+        return cmd_document_export(exp_path, args.write, generate_pdf, overwrite)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()

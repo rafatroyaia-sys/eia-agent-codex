@@ -252,8 +252,9 @@ Ver sección §4 del informe de normalización adjunto (`cierre_normalizacion_ba
 | DOC-05 | Visibilidad auditoria final en Documento Ambiental | ✅ **COMPLETADO** | 2026-05-21 | DOC-01+DOC-04 actualizados, +21 tests, QC OK en prueba real, suite 5980 OK |
 | DOC-06 | Empaquetador final del Documento Ambiental | ✅ **COMPLETADO** | 2026-05-25 | `document_package_builder.py`, 68 tests, CLI `document-package [--write]`, 4 secciones paquete_entrega, sin PDF/ZIP, suite 6048 OK |
 | QA-07 | Prueba real paquete de entrega NAVE-222 | ✅ **COMPLETADO** | 2026-05-25 | 20 archivos copiados, 4 secciones OK, README+disclaimer, DOCX 1.68 MB, 0 bugs, suite 6036 OK |
+| DOC-07 | Exportacion ZIP y PDF del paquete documental final | ✅ **COMPLETADO** | 2026-05-25 | `document_exporter.py`, 80 tests, CLI `document-export [--write] [--no-pdf]`, ZIP obligatorio, PDF best-effort, suite 6128 OK |
 
 ---
 
 *Matriz maestra creada 2026-04-19 — normalización pre-P1 código*  
-*Actualizada 2026-05-25 — ítems DOC-06 y QA-07 añadidos*
+*Actualizada 2026-05-25 — ítems DOC-06, QA-07 y DOC-07 añadidos*
