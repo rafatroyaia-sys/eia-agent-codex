@@ -12,7 +12,7 @@ Proporciona acceso desde consola a los módulos de productización:
   phase6-generate-measures, phase6-generate-pva,
   phase6-validate-pva, phase6-cumulative, audit-art45, audit-prudence,
   document-manifest, document-build-md, document-build-docx,
-  document-insert-figures, document-qc.
+  document-insert-figures, document-qc, document-package.
 
 Uso:
     python run_expediente.py <expediente> status
@@ -35,6 +35,7 @@ Uso:
     python run_expediente.py <expediente> phase6-assign-conesa [--write] [--no-score]
     python run_expediente.py <expediente> phase6-generate-measures [--write]
     python run_expediente.py <expediente> phase6-generate-pva [--write]
+    python run_expediente.py <expediente> document-package [--write] [--overwrite]
 """
 import argparse
 import sys
@@ -1223,6 +1224,37 @@ def cmd_audit_diagnostic_measures(exp_path: Path, write: bool) -> int:
     return 0 if result.is_valid() else 1
 
 
+def cmd_document_package(exp_path: Path, write: bool, overwrite: bool) -> int:
+    """Empaqueta los outputs del Documento Ambiental en paquete_entrega/ (DOC-06)."""
+    from eia_agent.core.document_package_builder import (
+        build_document_package,
+        write_package_build_outputs,
+    )
+
+    try:
+        result = build_document_package(exp_path, write_outputs=write, overwrite=overwrite)
+    except Exception as exc:
+        print(f"Error en document-package: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        doc_dir = exp_path / "documento"
+        try:
+            json_path, md_path = write_package_build_outputs(result, doc_dir)
+            print(f"\nOutputs escritos:")
+            print(f"  {result.package_dir}")
+            print(f"  {json_path}")
+            print(f"  {md_path}")
+        except Exception as exc:
+            print(f"Error escribiendo outputs: {exc}", file=sys.stderr)
+            return 1
+
+    # exit 0 si no faltan requeridos (tanto en dry-run como en write)
+    return 0 if result.missing_required_count() == 0 else 1
+
+
 def cmd_document_qc(exp_path: Path, write: bool) -> int:
     """Control de calidad del paquete documental final (DOC-04)."""
     from eia_agent.core.document_quality_checker import (
@@ -2045,6 +2077,31 @@ Ejemplos:
         ),
     )
 
+    doc06_p = sub.add_parser(
+        "document-package",
+        help=(
+            "Empaquetar outputs documentales en documento/paquete_entrega/ (DOC-06). "
+            "Sin --write solo muestra que se empaquetaria."
+        ),
+    )
+    doc06_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Crear documento/paquete_entrega/, copiar archivos, "
+            "generar README_ENTREGA.md, package_build_result.json y .md"
+        ),
+    )
+    doc06_p.add_argument(
+        "--overwrite",
+        action="store_true",
+        default=True,
+        help=(
+            "Sobreescribir paquete_entrega/ si ya existe (comportamiento por defecto). "
+            "Pase --no-overwrite para omitir si ya existe."
+        ),
+    )
+
     return parser
 
 
@@ -2141,6 +2198,9 @@ def main(argv=None) -> int:
         return cmd_document_insert_figures(exp_path, args.write)
     if args.command == "document-qc":
         return cmd_document_qc(exp_path, args.write)
+    if args.command == "document-package":
+        overwrite = getattr(args, "overwrite", True)
+        return cmd_document_package(exp_path, args.write, overwrite)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()

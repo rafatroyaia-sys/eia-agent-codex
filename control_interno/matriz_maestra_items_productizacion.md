@@ -250,8 +250,9 @@ Ver sección §4 del informe de normalización adjunto (`cierre_normalizacion_ba
 | DOC-04 | Control de calidad paquete documental | ✅ **COMPLETADO** | 2026-05-20 | `document_quality_checker.py`, 118+3 tests, CLI `document-qc`, suite 5980 OK |
 | QA-06 | Prueba real QC documental DOCX enriquecido | ✅ **COMPLETADO** | 2026-05-21 | 11/11 archivos, A-K 11/11, FIG-001..FIG-006, QC-E006 real documentado, suite 5960 OK |
 | DOC-05 | Visibilidad auditoria final en Documento Ambiental | ✅ **COMPLETADO** | 2026-05-21 | DOC-01+DOC-04 actualizados, +21 tests, QC OK en prueba real, suite 5980 OK |
+| DOC-06 | Empaquetador final del Documento Ambiental | ✅ **COMPLETADO** | 2026-05-25 | `document_package_builder.py`, 68 tests, CLI `document-package [--write]`, 4 secciones paquete_entrega, sin PDF/ZIP, suite 6048 OK |
 
 ---
 
 *Matriz maestra creada 2026-04-19 — normalización pre-P1 código*  
-*Actualizada 2026-05-21 — ítems QA-06 y DOC-05 añadidos*
+*Actualizada 2026-05-25 — ítem DOC-06 añadido*
