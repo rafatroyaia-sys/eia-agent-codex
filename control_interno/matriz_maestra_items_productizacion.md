@@ -254,8 +254,9 @@ Ver sección §4 del informe de normalización adjunto (`cierre_normalizacion_ba
 | QA-07 | Prueba real paquete de entrega NAVE-222 | ✅ **COMPLETADO** | 2026-05-25 | 20 archivos copiados, 4 secciones OK, README+disclaimer, DOCX 1.68 MB, 0 bugs, suite 6036 OK |
 | DOC-07 | Exportacion ZIP y PDF del paquete documental final | ✅ **COMPLETADO** | 2026-05-25 | `document_exporter.py`, 80 tests, CLI `document-export [--write] [--no-pdf]`, ZIP obligatorio, PDF best-effort, suite 6128 OK |
 | QA-08 | Prueba real exportacion ZIP/PDF NAVE-222 | ✅ **COMPLETADO** | 2026-05-25 | ZIP 21 archivos 3.2 MB, SKIPPED_NO_CONVERTER, exit 0, JSON correcto, 0 bugs, suite 6128 OK |
+| DOC-08 | Metadatos, firmas, checklist, DOCX final revisable | ✅ **COMPLETADO** | 2026-05-25 | `document_presentation_preparer.py`, 86 tests, CLI `document-prepare-presentation`, 12 items CHK, administrative_ready=False, suite 6214 OK |
 
 ---
 
 *Matriz maestra creada 2026-04-19 — normalización pre-P1 código*  
-*Actualizada 2026-05-25 — ítems DOC-06, QA-07, DOC-07 y QA-08 añadidos*
+*Actualizada 2026-05-25 — ítems DOC-06, QA-07, DOC-07, QA-08 y DOC-08 añadidos*

@@ -12,7 +12,8 @@ Proporciona acceso desde consola a los módulos de productización:
   phase6-generate-measures, phase6-generate-pva,
   phase6-validate-pva, phase6-cumulative, audit-art45, audit-prudence,
   document-manifest, document-build-md, document-build-docx,
-  document-insert-figures, document-qc, document-package, document-export.
+  document-insert-figures, document-qc, document-package, document-export,
+  document-prepare-presentation.
 
 Uso:
     python run_expediente.py <expediente> status
@@ -37,6 +38,7 @@ Uso:
     python run_expediente.py <expediente> phase6-generate-pva [--write]
     python run_expediente.py <expediente> document-package [--write] [--overwrite]
     python run_expediente.py <expediente> document-export [--write] [--no-pdf] [--overwrite]
+    python run_expediente.py <expediente> document-prepare-presentation [--write] [--no-final-docx]
 """
 import argparse
 import sys
@@ -1267,6 +1269,35 @@ def cmd_document_export(
     return 0 if result.error_count() == 0 else 1
 
 
+def cmd_document_prepare_presentation(
+    exp_path: Path, write: bool, create_final_docx: bool
+) -> int:
+    """Prepara el documento para revision y presentacion administrativa (DOC-08)."""
+    from eia_agent.core.document_presentation_preparer import (
+        prepare_document_for_presentation,
+        write_presentation_outputs,
+    )
+
+    try:
+        result = prepare_document_for_presentation(
+            exp_path,
+            write_outputs=write,
+            create_final_docx=create_final_docx,
+        )
+    except Exception as exc:
+        print(f"Error en document-prepare-presentation: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        print(f"\nOutputs escritos:")
+        for f in result.generated_files:
+            print(f"  {f}")
+
+    return 0 if result.is_success() else 1
+
+
 def cmd_document_package(exp_path: Path, write: bool, overwrite: bool) -> int:
     """Empaqueta los outputs del Documento Ambiental en paquete_entrega/ (DOC-06)."""
     from eia_agent.core.document_package_builder import (
@@ -2173,6 +2204,28 @@ Ejemplos:
         help="Sobreescribir ZIP existente (comportamiento por defecto).",
     )
 
+    doc08_p = sub.add_parser(
+        "document-prepare-presentation",
+        help=(
+            "Preparar documento para revision y presentacion administrativa (DOC-08). "
+            "Sin --write solo muestra que se generaria."
+        ),
+    )
+    doc08_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir metadatos, hoja de firmas, checklist y (si procede) "
+            "DOCX final revisable."
+        ),
+    )
+    doc08_p.add_argument(
+        "--no-final-docx",
+        action="store_true",
+        dest="no_final_docx",
+        help="No crear documento_ambiental_final_revisable.docx.",
+    )
+
     return parser
 
 
@@ -2276,6 +2329,9 @@ def main(argv=None) -> int:
         overwrite = getattr(args, "overwrite", True)
         generate_pdf = not getattr(args, "no_pdf", False)
         return cmd_document_export(exp_path, args.write, generate_pdf, overwrite)
+    if args.command == "document-prepare-presentation":
+        create_final_docx = not getattr(args, "no_final_docx", False)
+        return cmd_document_prepare_presentation(exp_path, args.write, create_final_docx)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()
