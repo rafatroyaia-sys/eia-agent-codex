@@ -38,6 +38,7 @@ from eia_agent.core.final_audit_report import (
     extract_final_issues_from_art45,
     extract_final_issues_from_block_consistency,
     extract_final_issues_from_conesa_check,
+    extract_final_issues_from_conditional_chains,
     extract_final_issues_from_diagnostic_measures,
     extract_final_issues_from_prl_measures,
     extract_final_issues_from_prudence,
@@ -754,25 +755,29 @@ class TestBuildFinalAuditReportMarkdown(unittest.TestCase):
         md = build_final_audit_report_markdown(self._result_no_conforme())
         self.assertIn("## 6. Resultado RD-06", md)
 
-    def test_has_section_9_bloqueantes(self) -> None:
+    def test_has_section_9_im09(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 9. Incidencias bloqueantes", md)
+        self.assertIn("## 9. Resultado IM-09", md)
 
-    def test_has_section_10_altas(self) -> None:
+    def test_has_section_10_bloqueantes(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 10. Incidencias altas", md)
+        self.assertIn("## 10. Incidencias bloqueantes", md)
 
-    def test_has_section_11_medias_bajas(self) -> None:
+    def test_has_section_11_altas(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 11. Incidencias medias y bajas", md)
+        self.assertIn("## 11. Incidencias altas", md)
 
-    def test_has_section_12_recomendaciones(self) -> None:
+    def test_has_section_12_medias_bajas(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 12. Recomendaciones prioritarias", md)
+        self.assertIn("## 12. Incidencias medias y bajas", md)
 
-    def test_has_section_13_conclusion(self) -> None:
+    def test_has_section_13_recomendaciones(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 13. Conclusion final", md)
+        self.assertIn("## 13. Recomendaciones prioritarias", md)
+
+    def test_has_section_14_conclusion(self) -> None:
+        md = build_final_audit_report_markdown(self._result_no_conforme())
+        self.assertIn("## 14. Conclusion final", md)
 
     def test_no_declara_aptitud_administrativa(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
@@ -910,7 +915,7 @@ class TestWriteFinalAuditOutputs(unittest.TestCase):
             _, md_path = write_final_audit_outputs(self._make_result(), out)
             content = md_path.read_text(encoding="utf-8")
             self.assertIn("## 1. Resumen ejecutivo", content)
-            self.assertIn("## 13. Conclusion final", content)
+            self.assertIn("## 14. Conclusion final", content)
 
     def test_creates_output_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1742,6 +1747,269 @@ class TestBuildFinalAuditFromFilesWithRD08RD09(unittest.TestCase):
             )
             result = build_final_audit_from_files(tmp)
             self.assertEqual(result.status, "CONFORME")
+
+
+# ---------------------------------------------------------------------------
+# Fixtures IM-09
+# ---------------------------------------------------------------------------
+
+def _conditional_chain_data_ok() -> dict:
+    return {
+        "status": "OK",
+        "checked_impacts": ["IMP-001"],
+        "conditioned_impacts": [],
+        "conditioned_measures": [],
+        "conditioned_pva_programs": [],
+        "issues": [],
+        "error_count": 0,
+        "warning_count": 0,
+        "is_valid": True,
+    }
+
+
+def _conditional_chain_data_errors() -> dict:
+    return {
+        "status": "NO_CONFORME",
+        "checked_impacts": ["IMP-001"],
+        "conditioned_impacts": ["IMP-001"],
+        "conditioned_measures": [],
+        "conditioned_pva_programs": [],
+        "issues": [
+            {
+                "severity": "ERROR",
+                "code": "CC-IMP-E001",
+                "impact_id": "IMP-001",
+                "measure_id": None,
+                "pva_id": None,
+                "message": "Impacto condicionado IMP-001 sin medidas ni PVA asociados",
+                "recommendation": "Asociar medidas condicionadas al impacto",
+                "evidence": [],
+            }
+        ],
+        "error_count": 1,
+        "warning_count": 0,
+        "is_valid": False,
+    }
+
+
+def _conditional_chain_data_warnings() -> dict:
+    return {
+        "status": "CON_OBSERVACIONES",
+        "checked_impacts": ["IMP-001"],
+        "conditioned_impacts": ["IMP-001"],
+        "conditioned_measures": ["MED-001"],
+        "conditioned_pva_programs": [],
+        "issues": [
+            {
+                "severity": "WARNING",
+                "code": "CC-MEA-W001",
+                "impact_id": None,
+                "measure_id": "MED-001",
+                "pva_id": None,
+                "message": "Medida condicionada MED-001 sin PVA vinculado",
+                "recommendation": "Crear PVA condicionado para MED-001",
+                "evidence": [],
+            }
+        ],
+        "error_count": 0,
+        "warning_count": 1,
+        "is_valid": True,
+    }
+
+
+# ---------------------------------------------------------------------------
+# 20. TestExtractFinalIssuesFromConditionalChains (IM-09)
+# ---------------------------------------------------------------------------
+
+class TestExtractFinalIssuesFromConditionalChains(unittest.TestCase):
+
+    def test_none_returns_empty(self) -> None:
+        issues = extract_final_issues_from_conditional_chains(None)
+        self.assertEqual(issues, [])
+
+    def test_none_no_incompleto(self) -> None:
+        issues = extract_final_issues_from_conditional_chains(None)
+        self.assertFalse(any(i.code.startswith(_MISSING_CODE_PREFIX) for i in issues))
+
+    def test_clean_data_no_issues(self) -> None:
+        issues = extract_final_issues_from_conditional_chains(_conditional_chain_data_ok())
+        self.assertEqual(issues, [])
+
+    def test_error_generates_alta(self) -> None:
+        issues = extract_final_issues_from_conditional_chains(_conditional_chain_data_errors())
+        self.assertTrue(any(i.severity == "ALTA" for i in issues))
+
+    def test_warning_generates_media(self) -> None:
+        issues = extract_final_issues_from_conditional_chains(_conditional_chain_data_warnings())
+        self.assertTrue(any(i.severity == "MEDIA" for i in issues))
+
+    def test_sin_datos_generates_media(self) -> None:
+        data = {"status": "SIN_DATOS", "issues": []}
+        issues = extract_final_issues_from_conditional_chains(data)
+        self.assertTrue(any(i.severity == "MEDIA" for i in issues))
+
+    def test_corrupt_generates_alta(self) -> None:
+        data = {"corrupt": True, "error": "json error"}
+        issues = extract_final_issues_from_conditional_chains(data)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].severity, "ALTA")
+        self.assertEqual(issues[0].code, "AU04-E801")
+
+    def test_source_is_im09(self) -> None:
+        issues = extract_final_issues_from_conditional_chains(_conditional_chain_data_errors())
+        self.assertTrue(all("IM-09" in i.source for i in issues))
+
+
+# ---------------------------------------------------------------------------
+# 21. TestBuildFinalAuditResultWithIM09
+# ---------------------------------------------------------------------------
+
+class TestBuildFinalAuditResultWithIM09(unittest.TestCase):
+
+    def test_all_clean_including_im09_is_conforme(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            art45_data=_art45_data_ok(),
+            prudence_data=_prudence_data_ok(),
+            traceability_data=_traceability_data_ok(),
+            conditional_chain_data=_conditional_chain_data_ok(),
+        )
+        self.assertEqual(result.status, "CONFORME")
+
+    def test_im09_errors_no_conforme(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            art45_data=_art45_data_ok(),
+            prudence_data=_prudence_data_ok(),
+            traceability_data=_traceability_data_ok(),
+            conditional_chain_data=_conditional_chain_data_errors(),
+        )
+        self.assertEqual(result.status, "NO_CONFORME")
+
+    def test_im09_warnings_con_observaciones(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            art45_data=_art45_data_ok(),
+            prudence_data=_prudence_data_ok(),
+            traceability_data=_traceability_data_ok(),
+            conditional_chain_data=_conditional_chain_data_warnings(),
+        )
+        self.assertEqual(result.status, "CONFORME_CON_OBSERVACIONES")
+
+    def test_none_im09_stays_conforme(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            art45_data=_art45_data_ok(),
+            prudence_data=_prudence_data_ok(),
+            traceability_data=_traceability_data_ok(),
+        )
+        self.assertEqual(result.status, "CONFORME")
+
+    def test_im09_summary_in_result(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            conditional_chain_data=_conditional_chain_data_ok(),
+        )
+        self.assertIn("available", result.conditional_chain_summary)
+        self.assertTrue(result.conditional_chain_summary["available"])
+
+    def test_to_dict_contains_im09_summary(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+        )
+        d = result.to_dict()
+        self.assertIn("conditional_chain_summary", d)
+
+    def test_markdown_has_im09_section(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            conditional_chain_data=_conditional_chain_data_ok(),
+        )
+        md = build_final_audit_report_markdown(result)
+        self.assertIn("IM-09", md)
+
+    def test_markdown_has_cadenas_condicionales(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+        )
+        md = build_final_audit_report_markdown(result)
+        self.assertIn("condicionales", md.lower())
+
+    def test_notes_include_im09_state(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            conditional_chain_data=_conditional_chain_data_ok(),
+        )
+        notes_text = " ".join(result.notes)
+        self.assertIn("IM-09", notes_text)
+
+
+# ---------------------------------------------------------------------------
+# 22. TestBuildFinalAuditFromFilesWithIM09
+# ---------------------------------------------------------------------------
+
+class TestBuildFinalAuditFromFilesWithIM09(unittest.TestCase):
+
+    def test_with_im09_file_loads_it(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            aud = Path(tmp) / "auditoria"
+            aud.mkdir()
+            (aud / "art45_checklist_result.json").write_text(
+                json.dumps(_art45_data_ok()), encoding="utf-8"
+            )
+            (aud / "prudence_validation_result.json").write_text(
+                json.dumps(_prudence_data_ok()), encoding="utf-8"
+            )
+            (aud / "traceability_validation_result.json").write_text(
+                json.dumps(_traceability_data_ok()), encoding="utf-8"
+            )
+            (aud / "conditional_chain_result.json").write_text(
+                json.dumps(_conditional_chain_data_ok()), encoding="utf-8"
+            )
+            result = build_final_audit_from_files(tmp)
+            self.assertEqual(result.status, "CONFORME")
+            self.assertTrue(result.conditional_chain_summary.get("available"))
+
+    def test_with_im09_errors_no_conforme_from_files(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            aud = Path(tmp) / "auditoria"
+            aud.mkdir()
+            (aud / "art45_checklist_result.json").write_text(
+                json.dumps(_art45_data_ok()), encoding="utf-8"
+            )
+            (aud / "prudence_validation_result.json").write_text(
+                json.dumps(_prudence_data_ok()), encoding="utf-8"
+            )
+            (aud / "traceability_validation_result.json").write_text(
+                json.dumps(_traceability_data_ok()), encoding="utf-8"
+            )
+            (aud / "conditional_chain_result.json").write_text(
+                json.dumps(_conditional_chain_data_errors()), encoding="utf-8"
+            )
+            result = build_final_audit_from_files(tmp)
+            self.assertEqual(result.status, "NO_CONFORME")
+
+    def test_without_im09_stays_conforme(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            aud = Path(tmp) / "auditoria"
+            aud.mkdir()
+            (aud / "art45_checklist_result.json").write_text(
+                json.dumps(_art45_data_ok()), encoding="utf-8"
+            )
+            (aud / "prudence_validation_result.json").write_text(
+                json.dumps(_prudence_data_ok()), encoding="utf-8"
+            )
+            (aud / "traceability_validation_result.json").write_text(
+                json.dumps(_traceability_data_ok()), encoding="utf-8"
+            )
+            result = build_final_audit_from_files(tmp)
+            self.assertEqual(result.status, "CONFORME")
+            self.assertFalse(result.conditional_chain_summary.get("available"))
 
 
 if __name__ == "__main__":

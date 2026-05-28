@@ -19,8 +19,9 @@ Combina los resultados de las auditorías previas en un **informe final ejecutiv
 | RD-06 | conesa_checker | `auditoria/conesa_check_result.json` |
 | RD-08 | diagnostic_measure_validator | `auditoria/diagnostic_measure_validation_result.json` |
 | RD-09 | prl_measure_validator | `auditoria/prl_measure_validation_result.json` |
+| IM-09 | conditional_chain_validator | `auditoria/conditional_chain_result.json` |
 
-RD-04, RD-06, RD-08 y RD-09 son opcionales: si el archivo no existe, no se genera ninguna incidencia adicional (retrocompatible con expedientes que solo tienen AU-01/02/03).
+RD-04, RD-06, RD-08, RD-09 e IM-09 son opcionales: si el archivo no existe, no se genera ninguna incidencia adicional (retrocompatible con expedientes que solo tienen AU-01/02/03).
 
 Emite una calificación final (`CONFORME`, `CONFORME_CON_OBSERVACIONES`, `NO_CONFORME`, `INCOMPLETO`) y un informe en JSON y Markdown con incidencias ordenadas por severidad.
 
@@ -28,7 +29,7 @@ Emite una calificación final (`CONFORME`, `CONFORME_CON_OBSERVACIONES`, `NO_CON
 
 ## Qué NO hace AU-04
 
-- **No ejecuta AU-01, AU-02, AU-03, RD-04, RD-06, RD-08 ni RD-09 automáticamente.** Solo combina sus resultados existentes.
+- **No ejecuta AU-01, AU-02, AU-03, RD-04, RD-06, RD-08, RD-09 ni IM-09 automáticamente.** Solo combina sus resultados existentes.
 - **No corrige textos** del expediente.
 - **No declara aptitud administrativa.** La calificación es interna.
 - **No sustituye la revisión técnica ni jurídica** del Documento Ambiental.
@@ -38,7 +39,7 @@ Emite una calificación final (`CONFORME`, `CONFORME_CON_OBSERVACIONES`, `NO_CON
 
 ---
 
-## Cómo combina AU-01 + AU-02 + AU-03 + RD-04 + RD-06 + RD-08 + RD-09
+## Cómo combina AU-01 + AU-02 + AU-03 + RD-04 + RD-06 + RD-08 + RD-09 + IM-09
 
 ### De AU-01 (Checklist art.45):
 
@@ -109,6 +110,7 @@ Emite una calificación final (`CONFORME`, `CONFORME_CON_OBSERVACIONES`, `NO_CON
 
 | Situación | Severidad final |
 |-----------|----------------|
+
 | No disponible (None) | Sin incidencia — sin cambio de estado |
 | Resultado corrupto | ALTA (AU04-E701) |
 | `SIN_DATOS` | MEDIA (AU04-W702) |
@@ -116,13 +118,25 @@ Emite una calificación final (`CONFORME`, `CONFORME_CON_OBSERVACIONES`, `NO_CON
 | Issue `ERROR` de RD-09 | ALTA |
 | Issue `WARNING` de RD-09 | MEDIA |
 
+### De IM-09 (Cadenas condicionales impacto-medida-PVA):
+
+| Situación | Severidad final |
+|-----------|----------------|
+| No disponible (None) | Sin incidencia — sin cambio de estado (retrocompatible) |
+| Resultado corrupto | ALTA (AU04-E801) |
+| `SIN_DATOS` | MEDIA (AU04-W802) |
+| Issue `ERROR` de IM-09 | ALTA |
+| Issue `WARNING` de IM-09 | MEDIA |
+
+IM-09 verifica que las condiciones (GAP, CONT, AT, marcadores de texto) sean visibles y coherentes en la cadena completa: impacto condicionado → medida condicionada → PVA condicionado. No resuelve gaps ni cierra condicionantes.
+
 ---
 
 ## Estados finales
 
 | Estado | Condición |
 |--------|-----------|
-| `INCOMPLETO` | Falta alguna de las tres auditorías AU-01/AU-02/AU-03 (RD-04/RD-06/RD-08/RD-09 son opcionales) |
+| `INCOMPLETO` | Falta alguna de las tres auditorías AU-01/AU-02/AU-03 (RD-04/RD-06/RD-08/RD-09/IM-09 son opcionales) |
 | `NO_CONFORME` | Hay incidencias BLOQUEANTE o ALTA |
 | `CONFORME_CON_OBSERVACIONES` | Hay incidencias MEDIA o BAJA (sin BLOQUEANTE ni ALTA) |
 | `CONFORME` | Solo incidencias INFO o ninguna |
@@ -172,14 +186,17 @@ Extrae incidencias del validador de medidas diagnósticas RD-08. Si `data is Non
 ### `extract_final_issues_from_prl_measures(data) -> list[FinalAuditIssue]`
 Extrae incidencias del validador de separación EIA/PRL RD-09. Si `data is None`, devuelve `[]` (retrocompatible).
 
-### `build_final_audit_result(expediente_id, art45_data, prudence_data, traceability_data, block_consistency_data=None, conesa_check_data=None, diagnostic_measure_data=None, prl_measure_data=None) -> FinalAuditResult`
-Construye el resultado final combinando hasta 7 fuentes de auditoría (RD-04/RD-06/RD-08/RD-09 opcionales).
+### `extract_final_issues_from_conditional_chains(data) -> list[FinalAuditIssue]`
+Extrae incidencias del validador de cadenas condicionales IM-09. Si `data is None`, devuelve `[]` (retrocompatible).
+
+### `build_final_audit_result(expediente_id, art45_data, prudence_data, traceability_data, block_consistency_data=None, conesa_check_data=None, diagnostic_measure_data=None, prl_measure_data=None, conditional_chain_data=None) -> FinalAuditResult`
+Construye el resultado final combinando hasta 8 fuentes de auditoría (RD-04/RD-06/RD-08/RD-09/IM-09 opcionales).
 
 ### `build_final_audit_from_files(expediente_path) -> FinalAuditResult`
 Construye el resultado leyendo los JSONs desde `auditoria/`. Lanza `FileNotFoundError` si el expediente no existe. No lanza excepción por ausencia de archivos individuales.
 
 ### `build_final_audit_report_markdown(result) -> str`
-Genera el informe en markdown con 13 secciones (incluye secciones 5 RD-04, 6 RD-06, 7 RD-08 y 8 RD-09).
+Genera el informe en markdown con 14 secciones (incluye secciones 5 RD-04, 6 RD-06, 7 RD-08, 8 RD-09 y 9 IM-09).
 
 ### `write_final_audit_outputs(result, output_dir) -> tuple[Path, Path]`
 Escribe `final_audit_result.json` y `final_audit_result.md`.
@@ -214,6 +231,7 @@ Escribe `final_audit_result.json` y `final_audit_result.md`.
 | `conesa_check_summary` | dict | Resumen de RD-06 (vacío si no disponible) |
 | `diagnostic_measure_summary` | dict | Resumen de RD-08 (vacío si no disponible) |
 | `prl_measure_summary` | dict | Resumen de RD-09 (vacío si no disponible) |
+| `conditional_chain_summary` | dict | Resumen de IM-09 (vacío si no disponible) |
 | `issues` | list | Incidencias consolidadas |
 | `blocking_count` | int | Número de BLOQUEANTE |
 | `high_count` | int | Número de ALTA |

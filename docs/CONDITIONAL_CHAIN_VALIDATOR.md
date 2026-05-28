@@ -157,6 +157,40 @@ class ConditionalChainResult:
 
 ---
 
+## Integración en el pipeline técnico (PIPE-04)
+
+IM-09 se ejecuta automáticamente en el paso 9 del pipeline técnico:
+
+```bash
+python run_expediente.py <expediente> run-technical-pipeline --write
+```
+
+Posición en el pipeline: después de `PHASE6_VALIDATE_PVA` (paso 8) y antes de `PHASE6_CUMULATIVE` (paso 10). Esto garantiza que la validación de cadenas condicionales se realiza con el modelo PVA ya generado y validado.
+
+## Integración en la auditoría final (AU-04)
+
+El comando `audit-final` lee automáticamente `auditoria/conditional_chain_result.json` si existe:
+
+```bash
+python run_expediente.py <expediente> audit-final --write
+```
+
+Reglas de integración en AU-04:
+
+| Situación IM-09 | Impacto en auditoría final |
+|-----------------|---------------------------|
+| Archivo no existe | Sin incidencia (retrocompatible) |
+| `SIN_DATOS` | MEDIA |
+| Issue `ERROR` | ALTA → NO_CONFORME |
+| Issue `WARNING` | MEDIA → CONFORME_CON_OBSERVACIONES |
+| `OK` | Sin incidencias |
+
+**Las condiciones no se resuelven automáticamente.** La auditoría solo verifica que las condiciones son visibles y coherentes en la cadena. Resolver gaps, CONTs y ATs es responsabilidad del técnico redactor.
+
+**La auditoría final no declara aptitud administrativa.** `administrative_ready` es siempre `False`.
+
+---
+
 ## Cómo ejecutar los tests
 
 ```bash

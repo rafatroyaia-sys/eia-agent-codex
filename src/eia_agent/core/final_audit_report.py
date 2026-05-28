@@ -58,6 +58,7 @@ AUDIT_SOURCE: list[str] = [
     "RD-06_CONESA_CHECK",
     "RD-08_DIAGNOSTIC_MEASURES",
     "RD-09_PRL_MEASURES",
+    "IM-09_CONDITIONAL_CHAINS",
     "SISTEMA",
 ]
 
@@ -158,6 +159,7 @@ class FinalAuditResult:
     conesa_check_summary: dict = field(default_factory=dict)
     diagnostic_measure_summary: dict = field(default_factory=dict)
     prl_measure_summary: dict = field(default_factory=dict)
+    conditional_chain_summary: dict = field(default_factory=dict)
 
     issues: list[FinalAuditIssue] = field(default_factory=list)
     blocking_count: int = 0
@@ -195,6 +197,7 @@ class FinalAuditResult:
             "conesa_check_summary": self.conesa_check_summary,
             "diagnostic_measure_summary": self.diagnostic_measure_summary,
             "prl_measure_summary": self.prl_measure_summary,
+            "conditional_chain_summary": self.conditional_chain_summary,
             "issues": [i.to_dict() for i in self.issues],
             "blocking_count": self.blocking_count,
             "high_count": self.high_count,
@@ -885,6 +888,85 @@ def extract_final_issues_from_prl_measures(
 
 
 # ---------------------------------------------------------------------------
+# extract_final_issues_from_conditional_chains (IM-09)
+# ---------------------------------------------------------------------------
+
+def extract_final_issues_from_conditional_chains(
+    data: "dict | None",
+) -> "list[FinalAuditIssue]":
+    """Extrae incidencias finales del validador de cadenas condicionales (IM-09).
+
+    Si data es None: sin issue (IM-09 es optativo — backward compatible).
+    Si data corrupta: ALTA.
+    SIN_DATOS → MEDIA.
+    NO_CONFORME (status) → ALTA si no hay issues individuales que lo expliquen.
+    ERROR → ALTA, WARNING → MEDIA.
+
+    Diseño: backward compatible. Los expedientes sin conditional_chain_result.json
+    no generan incidencia; solo cuando el archivo existe y tiene errores.
+    """
+    if data is None:
+        return []
+
+    if data.get("corrupt"):
+        return [FinalAuditIssue(
+            severity="ALTA",
+            source="IM-09_CONDITIONAL_CHAINS",
+            code="AU04-E801",
+            message=f"JSON de IM-09 corrupto: {data.get('error', 'error desconocido')}",
+            recommendation=(
+                "Regenerar: python run_expediente.py <exp> audit-conditional-chains --write"
+            ),
+        )]
+
+    issues: list[FinalAuditIssue] = []
+    status = data.get("status", "SIN_DATOS")
+
+    if status == "SIN_DATOS":
+        issues.append(FinalAuditIssue(
+            severity="MEDIA",
+            source="IM-09_CONDITIONAL_CHAINS",
+            code="AU04-W802",
+            message=(
+                "IM-09: sin modelo Phase6 disponible para validar cadenas condicionales. "
+                "Ejecutar Fase 6 (IM-00 a IM-09) antes de esta auditoria."
+            ),
+            recommendation=(
+                "Ejecutar phase6-generate-pva antes de audit-conditional-chains."
+            ),
+        ))
+        return issues
+
+    for iss in data.get("issues", []):
+        raw_sev = iss.get("severity", "")
+        msg = iss.get("message", "")
+        rec = iss.get("recommendation", "")
+        code = iss.get("code", "CC-GEN-001")
+        imp_id = iss.get("impact_id")
+
+        if raw_sev == "ERROR":
+            issues.append(FinalAuditIssue(
+                severity="ALTA",
+                source="IM-09_CONDITIONAL_CHAINS",
+                code=f"AU04-{code}",
+                message=msg,
+                recommendation=rec,
+                related_requirement=imp_id,
+            ))
+        elif raw_sev == "WARNING":
+            issues.append(FinalAuditIssue(
+                severity="MEDIA",
+                source="IM-09_CONDITIONAL_CHAINS",
+                code=f"AU04-{code}",
+                message=msg,
+                recommendation=rec,
+                related_requirement=imp_id,
+            ))
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # determine_final_audit_status
 # ---------------------------------------------------------------------------
 
@@ -998,6 +1080,24 @@ def _build_summary_from_prl_measures(data: dict | None) -> dict:
     }
 
 
+def _build_summary_from_conditional_chains(data: dict | None) -> dict:
+    if data is None:
+        return {"available": False}
+    if data.get("corrupt"):
+        return {"available": False, "corrupt": True}
+    return {
+        "available": True,
+        "status": data.get("status", "SIN_DATOS"),
+        "checked_impacts": len(data.get("checked_impacts", [])),
+        "conditioned_impacts": len(data.get("conditioned_impacts", [])),
+        "conditioned_measures": len(data.get("conditioned_measures", [])),
+        "conditioned_pva_programs": len(data.get("conditioned_pva_programs", [])),
+        "error_count": data.get("error_count", 0),
+        "warning_count": data.get("warning_count", 0),
+        "is_valid": data.get("is_valid", False),
+    }
+
+
 def _build_summary_from_block_consistency(data: dict | None) -> dict:
     if data is None:
         return {"available": False}
@@ -1044,8 +1144,9 @@ def build_final_audit_result(
     conesa_check_data: "dict | None" = None,
     diagnostic_measure_data: "dict | None" = None,
     prl_measure_data: "dict | None" = None,
+    conditional_chain_data: "dict | None" = None,
 ) -> FinalAuditResult:
-    """Construye el resultado final de auditoría combinando AU-01/02/03 + RD-04/06/08/09.
+    """Construye el resultado final de auditoría combinando AU-01/02/03 + RD-04/06/08/09 + IM-09.
 
     Siempre devuelve un resultado válido. No lanza excepciones.
 
@@ -1058,6 +1159,7 @@ def build_final_audit_result(
         conesa_check_data: dict de conesa_check_result.json o None (optativo).
         diagnostic_measure_data: dict de diagnostic_measure_validation_result.json o None (optativo).
         prl_measure_data: dict de prl_measure_validation_result.json o None (optativo).
+        conditional_chain_data: dict de conditional_chain_result.json o None (optativo).
 
     Returns:
         FinalAuditResult con estado, conteos y lista de incidencias consolidadas.
@@ -1070,6 +1172,7 @@ def build_final_audit_result(
     all_issues.extend(extract_final_issues_from_conesa_check(conesa_check_data))
     all_issues.extend(extract_final_issues_from_diagnostic_measures(diagnostic_measure_data))
     all_issues.extend(extract_final_issues_from_prl_measures(prl_measure_data))
+    all_issues.extend(extract_final_issues_from_conditional_chains(conditional_chain_data))
 
     status = determine_final_audit_status(all_issues)
 
@@ -1088,6 +1191,7 @@ def build_final_audit_result(
         f"Estado RD-06: {_avail(conesa_check_data)}.",
         f"Estado RD-08: {_avail(diagnostic_measure_data)}.",
         f"Estado RD-09: {_avail(prl_measure_data)}.",
+        f"Estado IM-09: {_avail(conditional_chain_data)}.",
     ]
 
     return FinalAuditResult(
@@ -1101,6 +1205,7 @@ def build_final_audit_result(
         conesa_check_summary=_build_summary_from_conesa_check(conesa_check_data),
         diagnostic_measure_summary=_build_summary_from_diagnostic_measures(diagnostic_measure_data),
         prl_measure_summary=_build_summary_from_prl_measures(prl_measure_data),
+        conditional_chain_summary=_build_summary_from_conditional_chains(conditional_chain_data),
         issues=all_issues,
         blocking_count=blocking,
         high_count=high,
@@ -1259,8 +1364,29 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         )
     lines.append("")
 
-    # ── 9. Incidencias BLOQUEANTE ──
-    lines.append("## 9. Incidencias bloqueantes")
+    # ── 9. Resultado IM-09 ──
+    lines.append("## 9. Resultado IM-09 — Cadenas condicionales impacto-medida-PVA")
+    lines.append("")
+    s8 = result.conditional_chain_summary
+    if not s8.get("available"):
+        lines.append(
+            "_Auditoria IM-09 no disponible. Ejecute `audit-conditional-chains --write`._"
+        )
+    else:
+        lines.append(f"- Estado: {s8.get('status', '?')}")
+        lines.append(f"- Impactos revisados: {s8.get('checked_impacts', '?')}")
+        lines.append(f"- Impactos condicionados: {s8.get('conditioned_impacts', '?')}")
+        lines.append(f"- Medidas condicionadas: {s8.get('conditioned_measures', '?')}")
+        lines.append(f"- PVA condicionados: {s8.get('conditioned_pva_programs', '?')}")
+        lines.append(f"- Incidencias ERROR: {s8.get('error_count', '?')}")
+        lines.append(f"- Incidencias WARNING: {s8.get('warning_count', '?')}")
+        lines.append(
+            f"- Resultado: {'CONFORME' if s8.get('is_valid') else 'NO CONFORME'}"
+        )
+    lines.append("")
+
+    # ── 10. Incidencias BLOQUEANTE ──
+    lines.append("## 10. Incidencias bloqueantes")
     lines.append("")
     blockers = [i for i in result.issues if i.severity == "BLOQUEANTE"]
     if blockers:
@@ -1273,8 +1399,8 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         lines.append("_Sin incidencias BLOQUEANTE._")
         lines.append("")
 
-    # ── 10. Incidencias ALTA ──
-    lines.append("## 10. Incidencias altas")
+    # ── 11. Incidencias ALTA ──
+    lines.append("## 11. Incidencias altas")
     lines.append("")
     highs = [i for i in result.issues if i.severity == "ALTA"]
     if highs:
@@ -1290,8 +1416,8 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         lines.append("_Sin incidencias ALTA._")
         lines.append("")
 
-    # ── 11. Incidencias MEDIA y BAJA ──
-    lines.append("## 11. Incidencias medias y bajas")
+    # ── 12. Incidencias MEDIA y BAJA ──
+    lines.append("## 12. Incidencias medias y bajas")
     lines.append("")
     mid_low = [i for i in result.issues if i.severity in ("MEDIA", "BAJA")]
     if mid_low:
@@ -1303,8 +1429,8 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         lines.append("_Sin incidencias MEDIA ni BAJA._")
     lines.append("")
 
-    # ── 12. Recomendaciones prioritarias ──
-    lines.append("## 12. Recomendaciones prioritarias")
+    # ── 13. Recomendaciones prioritarias ──
+    lines.append("## 13. Recomendaciones prioritarias")
     lines.append("")
     priority_issues = [
         i for i in result.issues if i.severity in ("BLOQUEANTE", "ALTA")
@@ -1322,13 +1448,13 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         )
     lines.append("")
 
-    # ── 13. Conclusión final ──
-    lines.append("## 13. Conclusion final")
+    # ── 14. Conclusión final ──
+    lines.append("## 14. Conclusion final")
     lines.append("")
     status_descriptions = {
         "CONFORME": (
             "El expediente supera las verificaciones internas de AU-01, AU-02, AU-03, "
-            "RD-04, RD-06, RD-08 y RD-09 sin incidencias de severidad ALTA o BLOQUEANTE."
+            "RD-04, RD-06, RD-08, RD-09 e IM-09 sin incidencias de severidad ALTA o BLOQUEANTE."
         ),
         "CONFORME_CON_OBSERVACIONES": (
             "El expediente presenta observaciones de severidad MEDIA o BAJA que deben "
@@ -1402,6 +1528,9 @@ def build_final_audit_from_files(
     prl_measure_data = load_audit_json(
         auditoria_dir / "prl_measure_validation_result.json"
     )
+    conditional_chain_data = load_audit_json(
+        auditoria_dir / "conditional_chain_result.json"
+    )
 
     return build_final_audit_result(
         expediente_id=exp_path.name,
@@ -1412,6 +1541,7 @@ def build_final_audit_from_files(
         conesa_check_data=conesa_check_data,
         diagnostic_measure_data=diagnostic_measure_data,
         prl_measure_data=prl_measure_data,
+        conditional_chain_data=conditional_chain_data,
     )
 
 
