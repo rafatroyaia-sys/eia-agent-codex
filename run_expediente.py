@@ -1518,6 +1518,34 @@ def cmd_audit_prl_measures(exp_path: Path, write: bool) -> int:
     return 0 if result.is_valid() else 1
 
 
+def cmd_audit_conditional_chains(exp_path: Path, write: bool) -> int:
+    """Validador de cadenas condicionales impacto-medida-PVA (IM-09)."""
+    from eia_agent.core.conditional_chain_validator import (
+        validate_conditional_chains_from_files,
+        write_conditional_chain_outputs,
+    )
+
+    try:
+        result = validate_conditional_chains_from_files(exp_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en validador cadenas condicionales: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_conditional_chain_outputs(result, auditoria_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.is_valid() else 1
+
+
 def cmd_assumptions_summary(exp_path: Path, write: bool) -> int:
     """Muestra el resumen de asunciones de test del expediente (OB-05)."""
     from eia_agent.core.assumption_test_system import (
@@ -2077,6 +2105,16 @@ Ejemplos:
         help="Escribir prl_measure_validation_result.json y .md en auditoria/",
     )
 
+    im09_p = sub.add_parser(
+        "audit-conditional-chains",
+        help="Validador de cadenas condicionales impacto-medida-PVA (IM-09)",
+    )
+    im09_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir conditional_chain_result.json y .md en auditoria/",
+    )
+
     doc00_p = sub.add_parser(
         "document-manifest",
         help="Manifest del Documento Ambiental: estado por bloque A-K (DOC-00)",
@@ -2312,6 +2350,8 @@ def main(argv=None) -> int:
         return cmd_audit_diagnostic_measures(exp_path, args.write)
     if args.command == "audit-prl-measures":
         return cmd_audit_prl_measures(exp_path, args.write)
+    if args.command == "audit-conditional-chains":
+        return cmd_audit_conditional_chains(exp_path, args.write)
     if args.command == "document-manifest":
         return cmd_document_manifest(exp_path, args.write)
     if args.command == "document-build-md":

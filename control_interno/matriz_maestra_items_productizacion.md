@@ -23,6 +23,7 @@ Antes de la tabla maestra, registro los conflictos de IDs detectados y cómo que
 | **C-08** | RD-04 (validador coherencia entre bloques) vs AU-05 (validador coherencia inter-bloques): solapamiento | **Distinción**: RD-04 = validación durante redacción (AG-10); AU-05 = verificación post-redacción (M-12). Distintos momentos, mismo tipo de check. Mantener ambos IDs, P1 vs P2 según timing |
 | **C-09** | "CLI/orquestador básico" mencionado como ítem P1, pero no existe en backlog ningún ítem CLI | **CLI-01** (ítem nuevo) — runner básico `run_expediente.py [ID]` |
 | **C-10** | NL-05 (EvidenceState, esfuerzo S, dependencia —) implica que debería ser el PRIMER ítem de código. Pero NL-01 (schemas, esfuerzo M, dependencia —) también tiene dependencia vacía. El orden es ambiguo | **Orden canónico**: NL-05 → NL-01 → NL-02. EvidenceState define los valores que los schemas usan como enum |
+| **C-11** | IM-07 ocupado en tres lugares: (1) backlog Área 8 = "Validador cobertura PVA" COMPLETADO 2026-05-10; (2) backlog Área 14 + matriz GRUPO 8 = "Cadenas condicionales" código pendiente; (3) tabla P2 = "PVA genérico Compatible". Triple colisión. | **IM-09** = "Validador cadenas condicionales impacto-medida-PVA" — siguiente ID libre tras IM-08. Resuelto 2026-05-28. |
 
 ---
 
@@ -148,7 +149,8 @@ Ordenada por grupo de implementación (ver §Orden recomendado). Incluye todos l
 | **IM-08** | Validador cobertura PVA → **COMPLETADO como IM-07** | Implementado en `pva_coverage_validator.py` (2026-05-10). ID canónico definitivo: IM-07. | validador | IM-06, NL-02 | 99 tests OK. `docs/PVA_COVERAGE_VALIDATOR.md`. | ✅ **COMPLETADO 2026-05-10 (como IM-07)** |
 | **IM-08** (nuevo) | Generador sección C.5 acumulativos/sinérgicos | `build_cumulative_synergistic_section(model)` → grupos acumulativos por receptor, sinergias cruzadas (5 pares), texto prudente C.5.1–C.5.5, gaps declarados. CLI `phase6-cumulative [--write]`. | proceso | IM-00, IM-03 | Genera C.5 con 4 áreas para NAVE-222; si sin datos → cautela metodológica (no "no existen") | ✅ **COMPLETADO 2026-05-12** |
 | **IM-06** (Área 14) | Template C.5 acumulativos (código) → absorbido en IM-08 | El template C.5 se implementó como IM-08 canónico en 2026-05-12. | proceso | IM-01 | Absorbido. | ✅ PROMPT ✅ CÓDIGO (como IM-08) |
-| **IM-07** | Cadenas condicionales (código) | Función que detecta CONTs abiertos en `inferencias_y_gaps.json` y genera entradas `cadena_condicional` en `impactos/identificacion_valoracion_impactos.json`, con propagación a medidas y PVA (estado CONDICIONADO). | proceso | IM-01, OB-05 | Para CONT-001 de NAVE-222 genera cadena condicional con impactos afectados y medidas condicionadas | ✅ PROMPT — ❌ CÓDIGO |
+| **IM-07** | Cadenas condicionales (código) → **COMPLETADO como IM-09** | ID colisionaba triple (Área 8 completado, Área 14 pendiente, P2 table). Reasignado a IM-09 en 2026-05-28. | proceso | IM-01, OB-05 | Ver IM-09. | ✅ PROMPT ✅ CÓDIGO (como IM-09) |
+| **IM-09** | Validador cadenas condicionales impacto-medida-PVA | Detecta condiciones (GAP/CONT/AT/marcadores texto), verifica propagación coherente en cadena impacto→medida→PVA. 8 códigos CC-IMP/CC-MEA/CC-PVA. CLI `audit-conditional-chains [--write]`. | validador | IM-00, IM-06, IM-07 | 95 tests OK. `docs/CONDITIONAL_CHAIN_VALIDATOR.md`. | ✅ **COMPLETADO 2026-05-28** — `src/eia_agent/core/conditional_chain_validator.py`. Suite 6309 OK. |
 
 ### GRUPO 9 — Ensamblador DOCX (semana 7-8)
 
@@ -197,7 +199,7 @@ No se detallan a nivel de DONE/estado — están en backlog.md. Solo se listan p
 | Ingesta | IN-04 (PDF OCR) | IN-01 |
 | Triaje | TN-04 (órganos multi-CCAA) | TN-02 |
 | Cartografía | CA-07 (semáforo campo cartografía) | CA-03 |
-| Impactos | IM-07 (PVA genérico Compatible) | IM-06 |
+| Impactos | IM-10+ (PVA genérico Compatible — ID libre post-IM-09) | IM-09 |
 | Redacción | RD-03 (plantillas tipológicas) | RD-01 ✅ |
 | Ensamblador | EN-05 (TOC), EN-06 (portada), EN-07 (estilos admin), EN-08 (CI/CD) | EN-01 ✅ |
 | Auditoría | AU-05 (coherencia inter-bloques) | AU-01 |
@@ -224,7 +226,7 @@ Frontend completo (FE-01 a FE-06) + multi-usuario + infraestructura. Todos depen
 | RD-05 | ❌ No codificado | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
 | RD-06 | ❌ No codificado | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
 | IM-06 | ❌ No existe | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
-| IM-07 | ❌ No existe | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
+| IM-09 | ❌ No existía | ✅ PROMPT / ✅ CÓDIGO | **COMPLETADO 2026-05-28** — colisión IM-07 resuelta → ID canónico IM-09 |
 | RD-07 | ❌ No codificado | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
 | RD-08 | ⚠️ Aplicado, no codificado | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
 | RD-09 | ⚠️ Aplicado, no codificado | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
