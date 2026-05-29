@@ -106,6 +106,7 @@ class DocumentMetadata:
     document_qc_status: "str | None"
     package_status: "str | None"
     export_status: "str | None"
+    conditional_chain_status: "str | None" = None
     notes: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
 
@@ -125,6 +126,7 @@ class DocumentMetadata:
             "document_qc_status": self.document_qc_status,
             "package_status": self.package_status,
             "export_status": self.export_status,
+            "conditional_chain_status": self.conditional_chain_status,
             "administrative_ready": self.administrative_ready,
             "notes": self.notes,
             "warnings": self.warnings,
@@ -138,6 +140,7 @@ class DocumentMetadata:
             f"  QC documental     : {self.document_qc_status or 'N/D'}",
             f"  Paquete           : {self.package_status or 'N/D'}",
             f"  Exportacion       : {self.export_status or 'N/D'}",
+            f"  IM-09 cad.cond.   : {self.conditional_chain_status or 'N/D'}",
             f"  administrative_ready: {self.administrative_ready}",
         ]
         return "\n".join(lines)
@@ -271,9 +274,11 @@ def build_document_metadata(
     qc_data = safe_load_json(exp / "documento" / "document_quality_result.json")
     pkg_data = safe_load_json(exp / "documento" / "package_build_result.json")
     exp_data = safe_load_json(exp / "documento" / "document_export_result.json")
+    cc_data = safe_load_json(exp / "auditoria" / "conditional_chain_result.json")
 
     final_audit_status = audit_data.get("status") if audit_data else None
     document_qc_status = qc_data.get("status") if qc_data else None
+    conditional_chain_status = cc_data.get("status") if cc_data else None
     package_status = (
         "GENERADO" if (pkg_data and pkg_data.get("generated")) else
         ("PENDIENTE" if pkg_data else None)
@@ -319,6 +324,7 @@ def build_document_metadata(
         document_qc_status=document_qc_status,
         package_status=package_status,
         export_status=export_status,
+        conditional_chain_status=conditional_chain_status,
         notes=notes,
         warnings=warnings,
     )
@@ -620,6 +626,40 @@ def build_presentation_checklist(
             "Revisar el borrador MD y eliminar afirmaciones de aptitud administrativa.",
     ))
 
+    # CHK-013: Auditoria de cadenas condicionales IM-09 revisada
+    # Diseño: WARNING si no existe (no bloquea; es opcional post PIPE-04).
+    # WARNING si NO_CONFORME (coherente con CHK-006 que tambien usa WARNING para
+    # audit-final NO_CONFORME; el caracter del checklist es advisory, no bloqueante;
+    # los errores graves quedan capturados en QC-E009 y en el AVISO del Bloque I).
+    cc_json = exp / "auditoria" / "conditional_chain_result.json"
+    cc_meta = safe_load_json(cc_json)
+    if cc_meta is not None:
+        cc_status_val = cc_meta.get("status", "")
+        if cc_status_val == "NO_CONFORME":
+            chk13_status = "WARNING"
+            chk13_evidence = [f"IM-09 status: {cc_status_val}"]
+            chk13_rec = (
+                "IM-09 NO_CONFORME: revisar cadenas condicionales antes de cerrar."
+            )
+        else:
+            chk13_status = "OK"
+            chk13_evidence = [f"IM-09 status: {cc_status_val}"]
+            chk13_rec = ""
+    else:
+        chk13_status = "WARNING"
+        chk13_evidence = []
+        chk13_rec = (
+            "No se encontro auditoria/conditional_chain_result.json. "
+            "Ejecutar audit-conditional-chains --write."
+        )
+    items.append(PresentationChecklistItem(
+        item_id="CHK-013",
+        description="Auditoria de cadenas condicionales IM-09 revisada",
+        status=chk13_status,
+        evidence=chk13_evidence,
+        recommendation=chk13_rec,
+    ))
+
     return items
 
 
@@ -652,6 +692,7 @@ def build_metadata_markdown(metadata: DocumentMetadata) -> str:
         f"| QC documental | {metadata.document_qc_status or 'N/D'} |",
         f"| Paquete | {metadata.package_status or 'N/D'} |",
         f"| Exportacion | {metadata.export_status or 'N/D'} |",
+        f"| IM-09 cadenas condicionales | {metadata.conditional_chain_status or 'N/D'} |",
         "",
         "## 3. Advertencias",
         "",

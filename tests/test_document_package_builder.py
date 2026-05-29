@@ -744,5 +744,70 @@ class TestCLIDocumentPackage(unittest.TestCase):
             self.assertTrue(md_path.exists())
 
 
+# ---------------------------------------------------------------------------
+# DOC-09 — Tests IM-09 en paquete
+# ---------------------------------------------------------------------------
+
+class TestConditionalChainInPackageDOC09(unittest.TestCase):
+    """Verifica que conditional_chain_result.json/.md se empaquetan en 02_auditorias."""
+
+    def setUp(self):
+        self.tmp_obj = tempfile.TemporaryDirectory()
+        self.tmp = Path(self.tmp_obj.name)
+
+    def tearDown(self):
+        self.tmp_obj.cleanup()
+
+    def _minimal_exp(self) -> Path:
+        exp = self.tmp / "exp-cc-pkg"
+        exp.mkdir()
+        (exp / "auditoria").mkdir()
+        (exp / "documento").mkdir()
+        docx = exp / "documento" / "documento_ambiental_borrador.docx"
+        docx.write_bytes(b"PK fake")
+        md = exp / "documento" / "documento_ambiental_borrador.md"
+        md.write_text("# Borrador", encoding="utf-8")
+        return exp
+
+    def test_cc_json_in_audit_files_constant(self):
+        from eia_agent.core.document_package_builder import AUDIT_FILES
+        self.assertIn("auditoria/conditional_chain_result.json", AUDIT_FILES)
+
+    def test_cc_md_in_audit_files_constant(self):
+        from eia_agent.core.document_package_builder import AUDIT_FILES
+        self.assertIn("auditoria/conditional_chain_result.md", AUDIT_FILES)
+
+    def test_cc_json_copied_to_02_auditorias_when_exists(self):
+        exp = self._minimal_exp()
+        cc_json = exp / "auditoria" / "conditional_chain_result.json"
+        cc_json.write_text('{"status":"OK"}', encoding="utf-8")
+
+        result = build_document_package(exp, write_outputs=True, overwrite=True)
+        # copied files have package_path containing the filename
+        pkg_paths = [f.package_path for f in result.files if f.copied]
+        self.assertTrue(any("conditional_chain_result.json" in p for p in pkg_paths))
+
+    def test_cc_json_in_02_auditorias_section(self):
+        exp = self._minimal_exp()
+        (exp / "auditoria" / "conditional_chain_result.json").write_text(
+            '{"status":"OK"}', encoding="utf-8"
+        )
+        result = build_document_package(exp, write_outputs=True, overwrite=True)
+        cc_files = [f for f in result.files
+                    if "conditional_chain_result.json" in f.package_path and f.copied]
+        self.assertTrue(cc_files)
+        self.assertIn("02_auditorias", cc_files[0].package_path)
+
+    def test_cc_json_absent_goes_to_optional_missing(self):
+        exp = self._minimal_exp()
+        result = build_document_package(exp, write_outputs=False)
+        # optional_missing may contain full source paths
+        found = any(
+            "conditional_chain_result.json" in p
+            for p in result.optional_missing
+        )
+        self.assertTrue(found, f"conditional_chain_result.json not in optional_missing: {result.optional_missing}")
+
+
 if __name__ == "__main__":
     unittest.main()

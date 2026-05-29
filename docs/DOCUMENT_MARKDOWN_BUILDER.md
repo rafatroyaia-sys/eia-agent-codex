@@ -2,7 +2,7 @@
 
 Módulo: `src/eia_agent/core/document_markdown_builder.py`  
 CLI: `python run_expediente.py <expediente> document-build-md [--write]`  
-Tests: `tests/test_document_markdown_builder.py` (126 tests — +18 DOC-05)
+Tests: `tests/test_document_markdown_builder.py` (126 tests — +18 DOC-05 +15 DOC-09)
 
 ---
 
@@ -39,13 +39,13 @@ DOC-00 inventaría lo que existe, y DOC-01 lee esos archivos y genera el texto.
 |--------|--------|---------------------|
 | A | Identificación y descripción del proyecto | `control_interno/phase2_result.json`, `impactos/phase6_actions.json` |
 | B | Inventario ambiental | `inventario/inventory_summary.json`, `inventario/phase5_gate_result.json`, fichas FI-*.md |
-| C | Identificación y valoración de impactos | `impactos/phase6_model_with_conesa.json`, `impactos/cumulative_synergistic_result.json`, `auditoria/conesa_check_result.json` |
+| C | Identificación y valoración de impactos | `impactos/phase6_model_with_conesa.json`, `impactos/cumulative_synergistic_result.json`, `auditoria/conesa_check_result.json`, `auditoria/conditional_chain_result.json` |
 | D | Medidas preventivas, correctoras, protectoras, diagnósticas y documentales | `impactos/phase6_model_with_measures.json`, `auditoria/diagnostic_measure_validation_result.json`, `auditoria/prl_measure_validation_result.json` |
 | E | Programa de vigilancia ambiental | `impactos/phase6_model_with_pva.json`, `impactos/pva_coverage_result.json` |
 | F | Vulnerabilidad ante riesgos y catástrofes | `inventario/inventory_summary.json`, `impactos/phase6_model_with_conesa.json` |
 | G | Alternativas y justificación de solución adoptada | `control_interno/phase3_result.json` (siempre PARTIAL: requiere datos del promotor) |
 | H | Red Natura 2000 y espacios naturales protegidos | `inventario/inventory_summary.json`, `impactos/phase6_model_with_conesa.json`, `auditoria/block_consistency_result.json` |
-| I | Conclusiones técnicas | `auditoria/final_audit_result.json`, `impactos/cumulative_synergistic_result.json` |
+| I | Conclusiones técnicas | `auditoria/final_audit_result.json`, `impactos/cumulative_synergistic_result.json`, `auditoria/conditional_chain_result.json` |
 | J | Resumen no técnico | `auditoria/final_audit_result.json`, `impactos/phase6_model_with_pva.json` (+ datos de A/B/C/D/E) |
 | K | Anexos y documentación complementaria | Listado de archivos en `cartografia/`, `clima/`, `inputs/`, `auditoria/`, `inventario/`, `impactos/` |
 
@@ -208,6 +208,32 @@ Cuando `auditoria/final_audit_result.json` existe, `build_block_i` incluye:
 - `INCOMPLETO` → aviso de auditoría incompleta
 
 Esta propagación permite que DOC-04 verifique la visibilidad con `QC-E006` sin generar `QC-E008` (frases prohibidas).
+
+---
+
+## Incorporación de IM-09 cadenas condicionales (DOC-09)
+
+**Bloque C — sección C.5**: si `auditoria/conditional_chain_result.json` existe, `build_block_c` añade:
+- Estado IM-09 (`OK`, `NO_CONFORME`, `CON_OBSERVACIONES`)
+- Impactos, medidas y PVA condicionados
+- Contadores de errores/warnings si hay incidencias
+- Nota de alcance (IM-09 no resuelve gaps ni cierra condicionantes)
+
+| Estado IM-09 | Bloque C |
+|---|---|
+| `OK` | muestra estado, contadores, nota de alcance |
+| `NO_CONFORME` | ídem + warning en `result.warnings` |
+| `CON_OBSERVACIONES` | ídem |
+| ausente | aviso de no disponible |
+
+**Bloque I — sección I.3**: `build_block_i` añade un aviso sobre IM-09 antes de la síntesis (I.4):
+
+| Estado IM-09 | Bloque I |
+|---|---|
+| `NO_CONFORME` | AVISO IM-09 — CADENAS CONDICIONALES NO_CONFORME (detectable por QC-E009) |
+| `CON_OBSERVACIONES` | Nota de observaciones |
+| `OK` | Nota de conformidad sin errores |
+| ausente | aviso de no disponible |
 
 ---
 

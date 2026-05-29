@@ -648,13 +648,13 @@ class TestBuildPresentationChecklist(unittest.TestCase):
             chk004 = next(i for i in items if i.item_id == "CHK-004")
             self.assertEqual(chk004.status, "ERROR")
 
-    def test_checklist_has_twelve_items(self):
+    def test_checklist_has_thirteen_items(self):
         with tempfile.TemporaryDirectory() as td:
             exp = Path(td) / "exp"
             exp.mkdir()
             metadata = build_document_metadata(exp)
             items = build_presentation_checklist(exp, metadata)
-            self.assertEqual(len(items), 12)
+            self.assertEqual(len(items), 13)
 
 
 # ---------------------------------------------------------------------------
@@ -1012,6 +1012,95 @@ class TestCLIDocumentPreparePresentation(unittest.TestCase):
             )
             code = self._run_cli(str(exp))
             self.assertEqual(code, 1)
+
+
+# ---------------------------------------------------------------------------
+# DOC-09 — Tests CHK-013 y conditional_chain_status en metadata
+# ---------------------------------------------------------------------------
+
+class TestCHK013AndConditionalChainDOC09(unittest.TestCase):
+    """Verifica CHK-013 y que metadata lee conditional_chain_status."""
+
+    def setUp(self):
+        self.tmp_obj = tempfile.TemporaryDirectory()
+        self.tmp = Path(self.tmp_obj.name)
+
+    def tearDown(self):
+        self.tmp_obj.cleanup()
+
+    def _exp_with_cc(self, status: "str | None" = None) -> Path:
+        exp = self.tmp / f"exp-chk13-{status or 'none'}"
+        exp.mkdir(parents=True, exist_ok=True)
+        (exp / "auditoria").mkdir(exist_ok=True)
+        if status is not None:
+            cc = {"status": status, "error_count": 1 if status == "NO_CONFORME" else 0}
+            (exp / "auditoria" / "conditional_chain_result.json").write_text(
+                json.dumps(cc), encoding="utf-8"
+            )
+        return exp
+
+    # --- metadata ---
+    def test_metadata_reads_conditional_chain_status_ok(self):
+        exp = self._exp_with_cc("OK")
+        meta = build_document_metadata(exp)
+        self.assertEqual(meta.conditional_chain_status, "OK")
+
+    def test_metadata_reads_conditional_chain_status_no_conforme(self):
+        exp = self._exp_with_cc("NO_CONFORME")
+        meta = build_document_metadata(exp)
+        self.assertEqual(meta.conditional_chain_status, "NO_CONFORME")
+
+    def test_metadata_conditional_chain_status_none_when_absent(self):
+        exp = self._exp_with_cc(None)
+        meta = build_document_metadata(exp)
+        self.assertIsNone(meta.conditional_chain_status)
+
+    def test_metadata_to_dict_includes_conditional_chain_status(self):
+        exp = self._exp_with_cc("OK")
+        meta = build_document_metadata(exp)
+        d = meta.to_dict()
+        self.assertIn("conditional_chain_status", d)
+        self.assertEqual(d["conditional_chain_status"], "OK")
+
+    # --- CHK-013 presente ---
+    def test_checklist_has_chk013(self):
+        exp = self._exp_with_cc("OK")
+        meta = build_document_metadata(exp)
+        items = build_presentation_checklist(exp, meta)
+        ids = [i.item_id for i in items]
+        self.assertIn("CHK-013", ids)
+
+    # --- CHK-013 status OK cuando IM-09 es OK ---
+    def test_chk013_ok_when_cc_ok(self):
+        exp = self._exp_with_cc("OK")
+        meta = build_document_metadata(exp)
+        items = build_presentation_checklist(exp, meta)
+        chk013 = next(i for i in items if i.item_id == "CHK-013")
+        self.assertEqual(chk013.status, "OK")
+
+    # --- CHK-013 WARNING cuando IM-09 NO_CONFORME ---
+    def test_chk013_warning_when_cc_no_conforme(self):
+        exp = self._exp_with_cc("NO_CONFORME")
+        meta = build_document_metadata(exp)
+        items = build_presentation_checklist(exp, meta)
+        chk013 = next(i for i in items if i.item_id == "CHK-013")
+        self.assertEqual(chk013.status, "WARNING")
+
+    # --- CHK-013 WARNING cuando falta conditional_chain_result ---
+    def test_chk013_warning_when_cc_absent(self):
+        exp = self._exp_with_cc(None)
+        meta = build_document_metadata(exp)
+        items = build_presentation_checklist(exp, meta)
+        chk013 = next(i for i in items if i.item_id == "CHK-013")
+        self.assertEqual(chk013.status, "WARNING")
+
+    # --- CHK-013 OK con CON_OBSERVACIONES ---
+    def test_chk013_ok_when_cc_con_observaciones(self):
+        exp = self._exp_with_cc("CON_OBSERVACIONES")
+        meta = build_document_metadata(exp)
+        items = build_presentation_checklist(exp, meta)
+        chk013 = next(i for i in items if i.item_id == "CHK-013")
+        self.assertEqual(chk013.status, "OK")
 
 
 if __name__ == "__main__":

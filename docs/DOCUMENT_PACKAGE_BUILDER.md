@@ -29,6 +29,8 @@ documento/paquete_entrega/
 │   ├── final_audit_result.json
 │   ├── document_quality_result.md
 │   ├── document_quality_result.json
+│   ├── conditional_chain_result.json  (IM-09, si existe)
+│   ├── conditional_chain_result.md    (IM-09, si existe)
 │   └── demas auditorias disponibles (art45, prudence, traceability, etc.)
 ├── 03_anexos_graficos/
 │   └── document_figures_result.md
@@ -67,6 +69,7 @@ Tambien genera en `documento/`:
 | `auditoria/conesa_check_result.json` | Cobertura Conesa (RD-06) |
 | `auditoria/diagnostic_measure_validation_result.json` | Medidas diagnosticas (RD-08) |
 | `auditoria/prl_measure_validation_result.json` | Medidas PRL (RD-09) |
+| `auditoria/conditional_chain_result.json` / `.md` | Cadenas condicionales IM-09 (DOC-09) |
 | `documento/document_manifest.json` / `.md` | Manifest (DOC-00) |
 | `documento/document_build_result.json` | Resultado build MD (DOC-01) |
 | `documento/docx_build_result.json` | Resultado build DOCX (DOC-02) |

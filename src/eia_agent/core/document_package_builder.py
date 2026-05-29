@@ -56,6 +56,8 @@ AUDIT_FILES: list[str] = [
     "auditoria/conesa_check_result.json",
     "auditoria/diagnostic_measure_validation_result.json",
     "auditoria/prl_measure_validation_result.json",
+    "auditoria/conditional_chain_result.json",
+    "auditoria/conditional_chain_result.md",
 ]
 
 # Archivos de trazabilidad

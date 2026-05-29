@@ -260,8 +260,9 @@ Ver sección §4 del informe de normalización adjunto (`cierre_normalizacion_ba
 | DOC-08 | Metadatos, firmas, checklist, DOCX final revisable | ✅ **COMPLETADO** | 2026-05-25 | `document_presentation_preparer.py`, 86 tests, CLI `document-prepare-presentation`, 12 items CHK, administrative_ready=False, suite 6214 OK |
 | QA-09 | Prueba real preparacion para revision NAVE-222 | ✅ **COMPLETADO** | 2026-05-25 | 6 archivos generados, DOCX +20 parrafos, CHK-006 WARNING esperado, 0 bugs, suite 6214 OK |
 | QA-10 | Prueba real pipeline completo con IM-09 integrado | ✅ **COMPLETADO** | 2026-05-29 | 18/18 pasos OK, conditional_chain_result.json+md, final_audit_result sección 9 IM-09, is_valid bug corregido, suite 6341 OK |
+| DOC-09 | Incorporacion IM-09 en documento final, QC, paquete y checklist | ✅ **COMPLETADO** | 2026-05-29 | C.5+I.3 en MD builder, QC-E009/W009/W010, AUDIT_FILES+conditional_chain, CHK-013 (13 items), +37 tests, suite 6376 OK |
 
 ---
 
 *Matriz maestra creada 2026-04-19 — normalización pre-P1 código*  
-*Actualizada 2026-05-29 — ítem QA-10 añadido; bug is_valid en _build_summary_from_conditional_chains corregido*
+*Actualizada 2026-05-29 — DOC-09 añadido: IM-09 incorporado en documento final, QC, paquete y checklist*

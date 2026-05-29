@@ -17,6 +17,7 @@ from eia_agent.core.document_quality_checker import (
     check_docx_structure,
     check_figures_and_captions,
     check_final_audit_visibility,
+    check_conditional_chain_visibility,
     check_no_administrative_ready_claim,
     check_required_document_files,
     detect_blocks_in_text,
@@ -1229,6 +1230,101 @@ class TestSafeLoadJson(unittest.TestCase):
         p.write_text("[1, 2, 3]", encoding="utf-8")
         data = safe_load_json(p)
         self.assertEqual(data, [1, 2, 3])
+
+
+# ---------------------------------------------------------------------------
+# DOC-09 — Tests check_conditional_chain_visibility
+# ---------------------------------------------------------------------------
+
+class TestCheckConditionalChainVisibilityDOC09(unittest.TestCase):
+    """Verifica el check de visibilidad de IM-09 en el documento."""
+
+    def setUp(self):
+        self.tmp_obj = tempfile.TemporaryDirectory()
+        self.tmp = Path(self.tmp_obj.name)
+
+    def tearDown(self):
+        self.tmp_obj.cleanup()
+
+    def _exp(self, cc_status: "str | None" = None, doc_text: str = "") -> Path:
+        exp = self.tmp / "exp-cc"
+        exp.mkdir(parents=True, exist_ok=True)
+        (exp / "auditoria").mkdir(exist_ok=True)
+        (exp / "documento").mkdir(exist_ok=True)
+
+        if cc_status is not None:
+            cc = {
+                "status": cc_status,
+                "error_count": 1 if cc_status == "NO_CONFORME" else 0,
+                "warning_count": 0,
+            }
+            (exp / "auditoria" / "conditional_chain_result.json").write_text(
+                json.dumps(cc), encoding="utf-8"
+            )
+
+        if doc_text:
+            (exp / "documento" / "documento_ambiental_borrador.md").write_text(
+                doc_text, encoding="utf-8"
+            )
+        return exp
+
+    def test_no_cc_file_no_pipeline_no_issues(self):
+        exp = self._exp()
+        issues = check_conditional_chain_visibility(exp)
+        self.assertEqual(issues, [])
+
+    def test_no_cc_file_with_pipeline_including_audit_cc_step_gives_warning(self):
+        exp = self._exp()
+        pipe = {
+            "steps": [
+                {"step_id": "AUDIT_CONDITIONAL_CHAINS", "status": "SUCCESS"}
+            ]
+        }
+        (exp / "auditoria" / "technical_pipeline_result.json").write_text(
+            json.dumps(pipe), encoding="utf-8"
+        )
+        issues = check_conditional_chain_visibility(exp)
+        codes = [i.code for i in issues]
+        self.assertIn("QC-W009", codes)
+
+    def test_cc_ok_doc_mentions_im09_no_issues(self):
+        exp = self._exp(cc_status="OK", doc_text="Resultado IM-09 cadenas condicionales OK.")
+        issues = check_conditional_chain_visibility(exp)
+        self.assertEqual(issues, [])
+
+    def test_cc_ok_doc_no_mention_gives_warning(self):
+        exp = self._exp(cc_status="OK", doc_text="Documento sin mencion de auditoria.")
+        issues = check_conditional_chain_visibility(exp)
+        codes = [i.code for i in issues]
+        self.assertIn("QC-W010", codes)
+
+    def test_cc_no_conforme_doc_mentions_im09_no_error(self):
+        exp = self._exp(
+            cc_status="NO_CONFORME",
+            doc_text="AVISO IM-09 cadenas condicionales NO_CONFORME detectado.",
+        )
+        issues = check_conditional_chain_visibility(exp)
+        errors = [i for i in issues if i.severity == "ERROR"]
+        self.assertEqual(errors, [])
+
+    def test_cc_no_conforme_doc_no_mention_gives_error(self):
+        exp = self._exp(cc_status="NO_CONFORME", doc_text="Documento sin mencion.")
+        issues = check_conditional_chain_visibility(exp)
+        codes = [i.code for i in issues]
+        self.assertIn("QC-E009", codes)
+
+    def test_cc_con_observaciones_doc_no_mention_gives_warning(self):
+        exp = self._exp(cc_status="CON_OBSERVACIONES", doc_text="Documento sin mencion.")
+        issues = check_conditional_chain_visibility(exp)
+        codes = [i.code for i in issues]
+        self.assertIn("QC-W010", codes)
+
+    def test_cc_integrated_in_run_quality_check(self):
+        from eia_agent.core.document_quality_checker import run_document_quality_check
+        exp = self._exp(cc_status="NO_CONFORME", doc_text="Sin referencia a cadenas.")
+        result = run_document_quality_check(exp)
+        codes = [i.code for i in result.issues]
+        self.assertIn("QC-E009", codes)
 
 
 if __name__ == "__main__":

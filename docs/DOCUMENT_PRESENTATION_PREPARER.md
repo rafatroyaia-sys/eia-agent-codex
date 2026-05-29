@@ -89,6 +89,7 @@ El modulo lee los siguientes JSONs si existen (no falla si faltan):
 | `documento/document_quality_result.json` | `document_qc_status` |
 | `documento/package_build_result.json` | `package_status` |
 | `documento/document_export_result.json` | `export_status` |
+| `auditoria/conditional_chain_result.json` | `conditional_chain_status` (IM-09, DOC-09) |
 
 `administrative_ready` es siempre `False` en los metadatos generados,
 independientemente de lo que digan los JSONs de entrada.
@@ -109,7 +110,7 @@ La hoja de firmas (`hoja_firmas.md`) contiene:
 
 ---
 
-## Checklist de presentacion/revision (12 items)
+## Checklist de presentacion/revision (13 items)
 
 | ID | Descripcion | ERROR si... | WARNING si... |
 |----|-------------|-------------|---------------|
@@ -125,6 +126,7 @@ La hoja de firmas (`hoja_firmas.md`) contiene:
 | CHK-010 | Hoja de firmas generable | — | Metadata insuficiente |
 | CHK-011 | Figuras documentadas si existen | — | document_figures_result indica generated=False |
 | CHK-012 | Sin frases de aptitud administrativa | — | Frases prohibidas en MD |
+| CHK-013 | IM-09 cadenas condicionales revisado | — | conditional_chain_result.json ausente o NO_CONFORME |
 
 ---
 
@@ -170,7 +172,7 @@ Genera la hoja de firmas en Markdown.
 
 ### `build_presentation_checklist(expediente_path, metadata)`
 
-Construye los 12 items del checklist. No modifica el expediente.
+Construye los 13 items del checklist. No modifica el expediente.
 
 ### `append_signature_sheet_to_docx(input_docx_path, output_docx_path, signature_markdown)`
 
@@ -189,7 +191,7 @@ Carga JSON tolerante. Devuelve dict o None.
 | `expediente_id` | str | ID del expediente |
 | `status` | str | Estado global (ver PRESENTATION_STATUS) |
 | `metadata` | DocumentMetadata | Metadatos del documento |
-| `checklist_items` | list[PresentationChecklistItem] | 12 items del checklist |
+| `checklist_items` | list[PresentationChecklistItem] | 13 items del checklist |
 | `issues` | list[PresentationIssue] | Incidencias detectadas |
 | `generated_files` | list[str] | Archivos escritos (si write_outputs=True) |
 
@@ -218,6 +220,7 @@ Carga JSON tolerante. Devuelve dict o None.
 | `document_qc_status` | str|None | Estado del QC documental |
 | `package_status` | str|None | Estado del paquete |
 | `export_status` | str|None | Estado de la exportacion |
+| `conditional_chain_status` | str|None | Estado IM-09 cadenas condicionales (DOC-09) |
 | `administrative_ready` | bool | Siempre False (propiedad) |
 
 ---
@@ -310,5 +313,4 @@ Los tests son completamente offline:
 
 ## Siguiente paso sugerido
 
-- **QA-09**: Prueba real de DOC-08 sobre NAVE-222.
-- **DOC-09**: Modulo de indices y TOC automatico (EN-05, P2).
+- **DOC-09** (COMPLETADO): IM-09 cadenas condicionales visible en documento, QC, paquete y checklist.

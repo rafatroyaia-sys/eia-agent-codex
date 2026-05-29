@@ -675,6 +675,110 @@ def check_no_administrative_ready_claim(text: str) -> list[DocumentQualityIssue]
 
 
 # ---------------------------------------------------------------------------
+# IM-09 — Visibilidad de cadenas condicionales
+# ---------------------------------------------------------------------------
+
+_IM09_KEYWORDS: list[str] = [
+    "im-09", "im09", "cadenas condicionales", "cadena condicional",
+    "conditional chain",
+]
+
+
+def check_conditional_chain_visibility(
+    expediente_path: "str | Path",
+) -> "list[DocumentQualityIssue]":
+    """
+    Verifica que la auditoria IM-09 de cadenas condicionales sea visible en el
+    documento cuando existe. No falla si el archivo no existe.
+
+    Codigos:
+      QC-W009 — pipeline incluye AUDIT_CONDITIONAL_CHAINS pero falta el JSON.
+      QC-W010 — IM-09 OK/CON_OBSERVACIONES pero el documento no lo menciona.
+      QC-E009 — IM-09 NO_CONFORME y el documento no lo refleja.
+    """
+    issues: list[DocumentQualityIssue] = []
+    exp = Path(expediente_path)
+
+    cc_path = exp / "auditoria" / "conditional_chain_result.json"
+    cc_data = safe_load_json(cc_path)
+
+    if cc_data is None:
+        pipe_path = exp / "auditoria" / "technical_pipeline_result.json"
+        pipe_data = safe_load_json(pipe_path)
+        if isinstance(pipe_data, dict):
+            steps = pipe_data.get("steps", [])
+            step_ids = (
+                [s.get("step_id", "") for s in steps]
+                if isinstance(steps, list) else []
+            )
+            if "AUDIT_CONDITIONAL_CHAINS" in step_ids:
+                issues.append(DocumentQualityIssue(
+                    severity="WARNING",
+                    code="QC-W009",
+                    file_path=str(cc_path),
+                    message=(
+                        "El pipeline incluye AUDIT_CONDITIONAL_CHAINS pero falta "
+                        "auditoria/conditional_chain_result.json."
+                    ),
+                    recommendation=(
+                        "Ejecutar: audit-conditional-chains --write o "
+                        "run-technical-pipeline --write."
+                    ),
+                    evidence=["AUDIT_CONDITIONAL_CHAINS en pipeline, sin resultado JSON"],
+                ))
+        return issues
+
+    cc_status = cc_data.get("status", "DESCONOCIDO")
+
+    docx_path = select_best_docx_for_qc(exp)
+    md_path = exp / "documento" / "documento_ambiental_borrador.md"
+
+    doc_text = ""
+    if docx_path and docx_path.exists():
+        doc_text = _normalize_text(extract_docx_text(docx_path))
+    if not doc_text and md_path.exists():
+        try:
+            doc_text = _normalize_text(md_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+    im09_visible = any(kw in doc_text for kw in _IM09_KEYWORDS) if doc_text else False
+
+    if cc_status == "NO_CONFORME" and not im09_visible:
+        issues.append(DocumentQualityIssue(
+            severity="ERROR",
+            code="QC-E009",
+            file_path=str(cc_path),
+            message=(
+                "IM-09 cadenas condicionales es NO_CONFORME pero el documento "
+                "no refleja esta incidencia."
+            ),
+            recommendation=(
+                "Regenerar Markdown y DOCX. Los bloques C y I deben mencionar "
+                "IM-09 y el estado NO_CONFORME."
+            ),
+            evidence=[f"cc_status={cc_status}"],
+        ))
+    elif cc_status in ("OK", "CON_OBSERVACIONES") and not im09_visible:
+        issues.append(DocumentQualityIssue(
+            severity="WARNING",
+            code="QC-W010",
+            file_path=str(cc_path),
+            message=(
+                f"IM-09 cadenas condicionales ({cc_status}) no se menciona "
+                f"en el documento."
+            ),
+            recommendation=(
+                "Regenerar Markdown y DOCX incluyendo la seccion de cadenas "
+                "condicionales (C.5 e I.3)."
+            ),
+            evidence=[f"cc_status={cc_status}"],
+        ))
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # Funcion principal
 # ---------------------------------------------------------------------------
 
@@ -706,6 +810,9 @@ def run_document_quality_check(
     docx_path = select_best_docx_for_qc(exp)
     docx_text = extract_docx_text(docx_path) if docx_path else ""
     all_issues.extend(check_no_administrative_ready_claim(docx_text))
+
+    # 6. Visibilidad IM-09 cadenas condicionales
+    all_issues.extend(check_conditional_chain_visibility(exp))
 
     # Recopilar informacion de diagnostico
     checked: list[str] = []

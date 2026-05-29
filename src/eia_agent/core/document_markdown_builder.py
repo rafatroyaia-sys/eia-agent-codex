@@ -490,11 +490,13 @@ def build_block_c(exp_path: "str | Path", manifest_item: Any) -> DocumentBlockBu
     cumul_path = exp / "impactos" / "cumulative_synergistic_result.json"
     cumul_md_path = exp / "impactos" / "C5_acumulativos_sinergicos.md"
     audit_conesa_path = exp / "auditoria" / "conesa_check_result.json"
+    cc_path = exp / "auditoria" / "conditional_chain_result.json"
 
     conesa_data = safe_load_json(conesa_path)
     cumul_data = safe_load_json(cumul_path)
     cumul_md = safe_read_text(cumul_md_path)
     audit_conesa = safe_load_json(audit_conesa_path)
+    cc_data = safe_load_json(cc_path)
 
     if conesa_data is not None:
         source_files.append("impactos/phase6_model_with_conesa.json")
@@ -628,6 +630,35 @@ def build_block_c(exp_path: "str | Path", manifest_item: Any) -> DocumentBlockBu
         lines.append(
             "> _No disponible: falta `impactos/cumulative_synergistic_result.json`. "
             "Ejecute `phase6-cumulative --write`._\n"
+        )
+
+    # C.5 Auditoria de cadenas condicionales IM-09
+    lines.append("\n### C.5 Auditoria de cadenas condicionales IM-09\n")
+    if cc_data is not None:
+        source_files.append("auditoria/conditional_chain_result.json")
+        cc_status = _str(_get(cc_data, "status"), "DESCONOCIDO")
+        cc_errors = int(_get(cc_data, "error_count") or 0)
+        cc_warns = int(_get(cc_data, "warning_count") or 0)
+        cc_cond_imp = _list_of(cc_data, "conditioned_impacts")
+        cc_cond_mea = _list_of(cc_data, "conditioned_measures")
+        cc_cond_pva = _list_of(cc_data, "conditioned_pva_programs")
+        lines.append(f"**Estado IM-09:** `{cc_status}`\n")
+        lines.append(f"**Impactos condicionados:** {len(cc_cond_imp)}\n")
+        lines.append(f"**Medidas condicionadas:** {len(cc_cond_mea)}\n")
+        lines.append(f"**PVA condicionados:** {len(cc_cond_pva)}\n")
+        if cc_errors or cc_warns:
+            lines.append(f"**Incidencias ERROR:** {cc_errors} | **WARNING:** {cc_warns}\n")
+        lines.append(
+            "> **Alcance IM-09:** Verifica que las condiciones (GAP, CONT, AT) "
+            "sean coherentes en la cadena impacto-medida-PVA. "
+            "No resuelve gaps ni cierra condicionantes.\n"
+        )
+        if cc_status == "NO_CONFORME":
+            warnings.append("IM-09 cadenas condicionales: NO_CONFORME.")
+    else:
+        lines.append(
+            "> _No disponible: falta `auditoria/conditional_chain_result.json`. "
+            "Ejecute `audit-conditional-chains --write`._\n"
         )
 
     if missing_files:
@@ -1493,7 +1524,41 @@ def build_block_i(exp_path: "str | Path", manifest_item: Any) -> DocumentBlockBu
     else:
         lines.append("> _Datos de efectos acumulativos no disponibles._\n")
 
-    lines.append("\n### I.3 Sintesis\n")
+    # IM-09 cadenas condicionales
+    lines.append("\n### I.3 Auditoria de cadenas condicionales IM-09\n")
+    cc_path_i = exp / "auditoria" / "conditional_chain_result.json"
+    cc_data_i = safe_load_json(cc_path_i)
+    if cc_data_i is not None:
+        if "auditoria/conditional_chain_result.json" not in source_files:
+            source_files.append("auditoria/conditional_chain_result.json")
+        cc_status_i = _str(_get(cc_data_i, "status"), "DESCONOCIDO")
+        if cc_status_i == "NO_CONFORME":
+            lines.append(
+                "\n> **AVISO IM-09 — CADENAS CONDICIONALES NO_CONFORME:** "
+                "La auditoria de cadenas condicionales presenta incidencias. "
+                "Las condiciones, gaps, CONT y AT deben revisarse antes de "
+                "cerrar tecnicamente el documento.\n"
+            )
+            warnings.append(
+                "IM-09 cadenas condicionales NO_CONFORME. Revisar antes de cerrar."
+            )
+        elif cc_status_i == "CON_OBSERVACIONES":
+            lines.append(
+                f"> **Nota IM-09:** La auditoria de cadenas condicionales presenta "
+                f"observaciones (estado: `{cc_status_i}`). Revisar incidencias.\n"
+            )
+        else:
+            lines.append(
+                f"> Control interno IM-09 cadenas condicionales: `{cc_status_i}`. "
+                f"No se detectan errores en la cadena impacto-medida-PVA.\n"
+            )
+    else:
+        lines.append(
+            "> _Auditoria de cadenas condicionales IM-09 no disponible. "
+            "Ejecute `audit-conditional-chains --write`._\n"
+        )
+
+    lines.append("\n### I.4 Sintesis\n")
     lines.append(
         "Las conclusiones de este documento son de caracter tecnico interno. "
         "No declaran aptitud administrativa. No sustituyen al Informe de Impacto "

@@ -1304,6 +1304,113 @@ class TestAuditVisibilityDOC05(unittest.TestCase):
         norm = unicodedata.normalize("NFKD", full_md.lower()).encode("ascii", "ignore").decode("ascii")
         self.assertIn("no conforme", norm)
 
+# ---------------------------------------------------------------------------
+# 12. Tests DOC-09 — IM-09 en bloques C e I
+# ---------------------------------------------------------------------------
+
+class TestIM09InMarkdownDOC09(unittest.TestCase):
+    """Verifica que los bloques C e I reflejan el estado de IM-09."""
+
+    def setUp(self):
+        self.tmp = Path(tempfile.mkdtemp())
+
+    def tearDown(self):
+        import shutil
+        shutil.rmtree(self.tmp, ignore_errors=True)
+
+    def _exp_with_cc(self, status: str) -> Path:
+        exp = self.tmp / f"exp-cc-{status.lower()}"
+        exp.mkdir(parents=True, exist_ok=True)
+        (exp / "auditoria").mkdir(exist_ok=True)
+        cc = {
+            "status": status,
+            "conditioned_impacts": ["IMP-001"],
+            "conditioned_measures": ["MED-001"],
+            "conditioned_pva_programs": ["PVA-001"],
+            "error_count": 1 if status == "NO_CONFORME" else 0,
+            "warning_count": 0,
+        }
+        (exp / "auditoria" / "conditional_chain_result.json").write_text(
+            json.dumps(cc, ensure_ascii=False), encoding="utf-8"
+        )
+        return exp
+
+    # --- Block C con IM-09 OK ---
+    def test_block_c_with_cc_ok_mentions_im09(self):
+        exp = self._exp_with_cc("OK")
+        result = build_block_c(exp, _FakeManifestItem("C"))
+        self.assertIn("IM-09", result.markdown)
+
+    def test_block_c_with_cc_ok_shows_status(self):
+        exp = self._exp_with_cc("OK")
+        result = build_block_c(exp, _FakeManifestItem("C"))
+        self.assertIn("OK", result.markdown)
+
+    # --- Block C con IM-09 NO_CONFORME ---
+    def test_block_c_with_cc_no_conforme_mentions_im09(self):
+        exp = self._exp_with_cc("NO_CONFORME")
+        result = build_block_c(exp, _FakeManifestItem("C"))
+        self.assertIn("IM-09", result.markdown)
+
+    def test_block_c_with_cc_no_conforme_has_warning(self):
+        exp = self._exp_with_cc("NO_CONFORME")
+        result = build_block_c(exp, _FakeManifestItem("C"))
+        self.assertTrue(any("IM-09" in w or "NO_CONFORME" in w for w in result.warnings))
+
+    # --- Block C sin conditional_chain_result ---
+    def test_block_c_without_cc_no_crash(self):
+        exp = self.tmp / "exp-no-cc"
+        exp.mkdir(parents=True, exist_ok=True)
+        result = build_block_c(exp, _FakeManifestItem("C"))
+        self.assertIsNotNone(result)
+
+    def test_block_c_without_cc_shows_no_disponible(self):
+        exp = self.tmp / "exp-no-cc2"
+        exp.mkdir(parents=True, exist_ok=True)
+        result = build_block_c(exp, _FakeManifestItem("C"))
+        self.assertIn("conditional_chain_result.json", result.markdown)
+
+    # --- Block I con IM-09 NO_CONFORME ---
+    def test_block_i_with_cc_no_conforme_has_aviso(self):
+        exp = self._exp_with_cc("NO_CONFORME")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIn("AVISO IM-09", result.markdown)
+
+    def test_block_i_with_cc_no_conforme_has_warning(self):
+        exp = self._exp_with_cc("NO_CONFORME")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertTrue(any("IM-09" in w or "NO_CONFORME" in w for w in result.warnings))
+
+    def test_block_i_with_cc_no_conforme_mentions_cadenas(self):
+        exp = self._exp_with_cc("NO_CONFORME")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIn("cadenas condicionales", result.markdown.lower())
+
+    # --- Block I con IM-09 OK ---
+    def test_block_i_with_cc_ok_no_aviso(self):
+        exp = self._exp_with_cc("OK")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertNotIn("AVISO IM-09", result.markdown)
+
+    def test_block_i_with_cc_ok_mentions_im09(self):
+        exp = self._exp_with_cc("OK")
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIn("IM-09", result.markdown)
+
+    # --- Block I sin conditional_chain_result ---
+    def test_block_i_without_cc_no_crash(self):
+        exp = self.tmp / "exp-i-no-cc"
+        exp.mkdir(parents=True, exist_ok=True)
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIsNotNone(result)
+
+    def test_block_i_without_cc_mentions_not_available(self):
+        exp = self.tmp / "exp-i-no-cc2"
+        exp.mkdir(parents=True, exist_ok=True)
+        result = build_block_i(exp, _FakeManifestItem("I"))
+        self.assertIn("IM-09", result.markdown)
+
+
 class TestConstants(unittest.TestCase):
 
     def test_block_order_has_11_blocks(self):

@@ -88,13 +88,27 @@ permitidas y no generan incidencia.
 | QC-E006 | ERROR | Auditoria NO_CONFORME no visible en documento |
 | QC-E007 | ERROR | administrative_ready=True en algun JSON |
 | QC-E008 | ERROR | Frase que declara aptitud administrativa |
+| QC-E009 | ERROR | IM-09 NO_CONFORME no visible en documento (DOC-09) |
 | QC-W001 | WARNING | Archivo recomendado no encontrado |
 | QC-W002 | WARNING | Indice/TOC no encontrado |
 | QC-W003 | WARNING | Sin figuras insertadas o resultado de figuras ausente |
 | QC-W004 | WARNING | Figuras omitidas durante insercion |
 | QC-W005 | WARNING | Auditoria final no encontrada |
 | QC-W006 | WARNING | Bloque G en estado PARTIAL |
+| QC-W009 | WARNING | Pipeline incluye AUDIT_CONDITIONAL_CHAINS pero falta conditional_chain_result.json (DOC-09) |
+| QC-W010 | WARNING | IM-09 OK/CON_OBSERVACIONES no mencionado en documento (DOC-09) |
 | QC-I001 | INFO | Archivo opcional no presente |
+
+### 6. Visibilidad IM-09 cadenas condicionales (DOC-09)
+
+Función: `check_conditional_chain_visibility(expediente_path)`
+
+- Si `conditional_chain_result.json` no existe pero el pipeline lo incluye → `QC-W009`.
+- Si `status == NO_CONFORME` y el documento no menciona `im-09` / `cadenas condicionales` → `QC-E009`.
+- Si `status == OK/CON_OBSERVACIONES` y el documento no lo menciona → `QC-W010`.
+
+El documento satisface la comprobación si el texto contiene alguna de estas cadenas (normalizado):
+`im-09`, `im09`, `cadenas condicionales`, `cadena condicional`, `conditional chain`.
 
 ## Archivos esperados del paquete
 
