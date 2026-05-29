@@ -186,7 +186,7 @@ Estos ítems son el componente código de los ítems de Área 14. El componente 
 | **RD-06** | Conesa checker (código) | `conesa_checker.py`: `has_complete_conesa_attributes`, `missing_conesa_attributes`, `impact_has_valid_conesa_explanation`, `validate_impact_conesa_coverage` (reglas A-F), `validate_phase6_conesa_coverage`, `validate_markdown_conesa_coverage`, `validate_conesa_coverage_from_files`. 10 codigos CC-*. `ConesaCheckResult`. CLI `audit-conesa [--write]`. | validador | NL-02, IM-01 | 89 tests OK. CLI `audit-conesa`. `docs/CONESA_CHECKER.md`. | ✅ **COMPLETADO 2026-05-17** — `src/eia_agent/core/conesa_checker.py`. Suite 5195 OK. Lado prompt: Etapa 1 ✅. |
 | **RD-08** | Diagnóstico≠reductor (código) | Función en NL-02/IM-02 que verifica que ninguna medida con `tipo: diagnostico` aparece como reductora de significancia. 4 reglas: E001 (texto afirma reducción), E002 (única reductora de impacto mejorado), W001 (vinculada a impacto mejorado no exclusiva), W002 (única en impacto SEVERO/CRITICO sin mejora). | validador | NL-02, IM-02 | 97 tests OK. CLI `audit-diagnostic-measures`. `docs/DIAGNOSTIC_MEASURE_VALIDATOR.md`. | ✅ **COMPLETADO 2026-05-17** — `src/eia_agent/core/diagnostic_measure_validator.py`. Suite 5332 OK. Detección keyword con negación. |
 | **RD-09** | EIA/PRL separator (código) | Valida que medidas PRL no aparecen como reductoras EIA: `is_prl_measure`, `measure_is_presented_as_environmental_reduction` (con negación), 4 reglas E001/E002/E003/W001, validación markdown (MD-E001/MD-W001), CLI combina modelo + markdown. | validador | NL-02, IM-02 | 110 tests OK. CLI `audit-prl-measures`. `docs/PRL_MEASURE_VALIDATOR.md`. | ✅ **COMPLETADO 2026-05-17** — `src/eia_agent/core/prl_measure_validator.py`. Suite 5442 OK. |
-| **RD-07** | Cross-ref gap ALTA positivo (código) | Función que verifica que cada IMP positivo en `identificacion_valoracion_impactos.json` que tiene un gap ALTA en `inferencias_y_gaps.json` tiene también una nota de incertidumbre en el bloque C correspondiente. | validador | NL-02, IM-01 | Detecta IMP-09 (empleo) con gap sobre datos del promotor sin nota de incertidumbre en C | ✅ PROMPT — ❌ CÓDIGO |
+| **RD-07** | Cross-ref gap ALTA positivo (código) | `positive_impact_gap_validator.py`: `impact_is_positive`, `extract_impact_gaps`, `impact_has_high_gap`, `impact_has_uncertainty_note`, `text_has_positive_uncertainty_note`, `text_has_prohibited_positive_closure`, `validate_positive_impact_gap`, `validate_positive_impacts_with_high_gaps`, `validate_positive_gap_from_files`, `build_positive_gap_report_markdown`, `write_positive_gap_outputs`. 4 códigos RD07-E001/E002/W001/W002. Negación contextual. `administrative_ready=False`. CLI `audit-positive-gaps [--write]`. | validador | NL-02, IM-03 | 99 tests OK. CLI `audit-positive-gaps`. `docs/POSITIVE_IMPACT_GAP_VALIDATOR.md`. | ✅ **COMPLETADO 2026-05-29** — `src/eia_agent/core/positive_impact_gap_validator.py`. Suite 6475 OK. Promovido a P1. |
 
 ---
 
@@ -228,7 +228,7 @@ Frontend completo (FE-01 a FE-06) + multi-usuario + infraestructura. Todos depen
 | RD-06 | ❌ No codificado | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
 | IM-06 | ❌ No existe | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
 | IM-09 | ❌ No existía | ✅ PROMPT / ✅ CÓDIGO | **COMPLETADO 2026-05-28** — colisión IM-07 resuelta → ID canónico IM-09 |
-| RD-07 | ❌ No codificado | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
+| RD-07 | ❌ No codificado | ✅ PROMPT / ✅ CÓDIGO | **COMPLETADO 2026-05-29** — positivos con gap ALTA → RD07-E001/E002/W001/W002 |
 | RD-08 | ⚠️ Aplicado, no codificado | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
 | RD-09 | ⚠️ Aplicado, no codificado | ✅ PROMPT / ❌ CÓDIGO | Actualizar backlog |
 
@@ -265,4 +265,4 @@ Ver sección §4 del informe de normalización adjunto (`cierre_normalizacion_ba
 ---
 
 *Matriz maestra creada 2026-04-19 — normalización pre-P1 código*  
-*Actualizada 2026-05-29 — DOC-09 añadido: IM-09 incorporado en documento final, QC, paquete y checklist*
+*Actualizada 2026-05-29 — RD-07 completado: validador impactos positivos con gap ALTA y nota de incertidumbre*

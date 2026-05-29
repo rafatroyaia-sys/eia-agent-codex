@@ -13,7 +13,8 @@ Proporciona acceso desde consola a los módulos de productización:
   phase6-validate-pva, phase6-cumulative, audit-art45, audit-prudence,
   document-manifest, document-build-md, document-build-docx,
   document-insert-figures, document-qc, document-package, document-export,
-  document-prepare-presentation.
+  document-prepare-presentation,
+  audit-positive-gaps.
 
 Uso:
     python run_expediente.py <expediente> status
@@ -39,6 +40,7 @@ Uso:
     python run_expediente.py <expediente> document-package [--write] [--overwrite]
     python run_expediente.py <expediente> document-export [--write] [--no-pdf] [--overwrite]
     python run_expediente.py <expediente> document-prepare-presentation [--write] [--no-final-docx]
+    python run_expediente.py <expediente> audit-positive-gaps [--write]
 """
 import argparse
 import sys
@@ -1546,6 +1548,34 @@ def cmd_audit_conditional_chains(exp_path: Path, write: bool) -> int:
     return 0 if result.is_valid() else 1
 
 
+def cmd_audit_positive_gaps(exp_path: Path, write: bool) -> int:
+    """Validador de impactos positivos con gap ALTA y nota de incertidumbre (RD-07)."""
+    from eia_agent.core.positive_impact_gap_validator import (
+        validate_positive_gap_from_files,
+        write_positive_gap_outputs,
+    )
+
+    try:
+        result = validate_positive_gap_from_files(exp_path)
+    except FileNotFoundError as exc:
+        print(f"Error: {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"Error en validador de impactos positivos: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        auditoria_dir = exp_path / "auditoria"
+        json_path, md_path = write_positive_gap_outputs(result, auditoria_dir)
+        print(f"\nOutputs escritos:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.error_count() == 0 else 1
+
+
 def cmd_assumptions_summary(exp_path: Path, write: bool) -> int:
     """Muestra el resumen de asunciones de test del expediente (OB-05)."""
     from eia_agent.core.assumption_test_system import (
@@ -2115,6 +2145,16 @@ Ejemplos:
         help="Escribir conditional_chain_result.json y .md en auditoria/",
     )
 
+    rd07_p = sub.add_parser(
+        "audit-positive-gaps",
+        help="Validador de impactos positivos con gap ALTA y nota de incertidumbre (RD-07)",
+    )
+    rd07_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir positive_gap_result.json y .md en auditoria/",
+    )
+
     doc00_p = sub.add_parser(
         "document-manifest",
         help="Manifest del Documento Ambiental: estado por bloque A-K (DOC-00)",
@@ -2352,6 +2392,8 @@ def main(argv=None) -> int:
         return cmd_audit_prl_measures(exp_path, args.write)
     if args.command == "audit-conditional-chains":
         return cmd_audit_conditional_chains(exp_path, args.write)
+    if args.command == "audit-positive-gaps":
+        return cmd_audit_positive_gaps(exp_path, args.write)
     if args.command == "document-manifest":
         return cmd_document_manifest(exp_path, args.write)
     if args.command == "document-build-md":
