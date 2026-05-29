@@ -109,3 +109,9 @@ Suite: 99 tests, 17 clases, 100% offline.
   `phase6_model_with_impacts.json`
 - Puede complementarse con: `AU-02` (prudence_validator), `RD-06`
   (conesa_checker), `RD-08` (diagnostic_measure_validator)
+- Integrado en pipeline: `PIPE-05` — paso `AUDIT_POSITIVE_GAPS` (posición 10
+  en el pipeline técnico de 19 pasos), entre `AUDIT_CONDITIONAL_CHAINS` y
+  `PHASE6_CUMULATIVE`
+- Consumido por: `AU-04` (`final_audit_report.py`) como fuente
+  `RD-07_POSITIVE_GAPS` — produce incidencias ALTA (ERROR) o MEDIA (WARNING)
+  en el informe final

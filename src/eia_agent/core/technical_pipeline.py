@@ -1,5 +1,5 @@
 """
-technical_pipeline -- PIPE-01 + PIPE-02 + PIPE-03 + PIPE-04
+technical_pipeline -- PIPE-01 + PIPE-02 + PIPE-03 + PIPE-04 + PIPE-05
 Pipeline técnico automático desde inventario (Fase 5) hasta auditoría final (AU-04).
 
 Orquesta en un único flujo, en orden, todos los módulos ya construidos:
@@ -12,15 +12,16 @@ Orquesta en un único flujo, en orden, todos los módulos ya construidos:
   7.  PHASE6_GENERATE_PVA          — generate_pva_for_model
   8.  PHASE6_VALIDATE_PVA          — validate_pva_coverage
   9.  AUDIT_CONDITIONAL_CHAINS     — validate_conditional_chains_from_files (IM-09)
-  10. PHASE6_CUMULATIVE            — build_cumulative_synergistic_section_from_json
-  11. AUDIT_ART45                  — evaluate_art45_checklist_from_files
-  12. AUDIT_PRUDENCE               — validate_prudence_from_files
-  13. AUDIT_TRACEABILITY           — validate_traceability_from_files
-  14. AUDIT_BLOCK_CONSISTENCY      — validate_block_consistency_from_files (RD-04)
-  15. AUDIT_CONESA                 — validate_conesa_coverage_from_files (RD-06)
-  16. AUDIT_DIAGNOSTIC_MEASURES   — validate_diagnostic_measures_from_files (RD-08)
-  17. AUDIT_PRL_MEASURES          — validate_prl_measures_from_files (RD-09)
-  18. AUDIT_FINAL                 — build_final_audit_from_files
+  10. AUDIT_POSITIVE_GAPS          — validate_positive_gap_from_files (RD-07)
+  11. PHASE6_CUMULATIVE            — build_cumulative_synergistic_section_from_json
+  12. AUDIT_ART45                  — evaluate_art45_checklist_from_files
+  13. AUDIT_PRUDENCE               — validate_prudence_from_files
+  14. AUDIT_TRACEABILITY           — validate_traceability_from_files
+  15. AUDIT_BLOCK_CONSISTENCY      — validate_block_consistency_from_files (RD-04)
+  16. AUDIT_CONESA                 — validate_conesa_coverage_from_files (RD-06)
+  17. AUDIT_DIAGNOSTIC_MEASURES   — validate_diagnostic_measures_from_files (RD-08)
+  18. AUDIT_PRL_MEASURES          — validate_prl_measures_from_files (RD-09)
+  19. AUDIT_FINAL                 — build_final_audit_from_files
 
 Principios no negociables:
   - No usa IA.
@@ -74,6 +75,7 @@ TECHNICAL_PIPELINE_STEPS: list[str] = [
     "PHASE6_GENERATE_PVA",
     "PHASE6_VALIDATE_PVA",
     "AUDIT_CONDITIONAL_CHAINS",
+    "AUDIT_POSITIVE_GAPS",
     "PHASE6_CUMULATIVE",
     "AUDIT_ART45",
     "AUDIT_PRUDENCE",
@@ -95,6 +97,7 @@ _STEP_NAMES: dict[str, str] = {
     "PHASE6_GENERATE_PVA": "Generacion del PVA",
     "PHASE6_VALIDATE_PVA": "Validacion de cobertura PVA",
     "AUDIT_CONDITIONAL_CHAINS": "Cadenas condicionales impacto-medida-PVA (IM-09)",
+    "AUDIT_POSITIVE_GAPS": "Impactos positivos con gaps ALTA (RD-07)",
     "PHASE6_CUMULATIVE": "Seccion C.5 acumulativos/sinergicos",
     "AUDIT_ART45": "Auditoria art.45 (AU-01)",
     "AUDIT_PRUDENCE": "Auditoria prudencia metodologica (AU-02)",
@@ -103,7 +106,7 @@ _STEP_NAMES: dict[str, str] = {
     "AUDIT_CONESA": "Cobertura Conesa en impactos (RD-06)",
     "AUDIT_DIAGNOSTIC_MEASURES": "Medidas diagnosticas vs reductoras (RD-08)",
     "AUDIT_PRL_MEASURES": "Separacion EIA / PRL (RD-09)",
-    "AUDIT_FINAL": "Informe final de auditoria (AU-04+RD-04+RD-06+RD-08+RD-09+IM-09)",
+    "AUDIT_FINAL": "Informe final de auditoria (AU-04+RD-04+RD-06+RD-07+RD-08+RD-09+IM-09)",
 }
 
 
@@ -1124,6 +1127,38 @@ def _run_audit_conditional_chains(
                      notes=[traceback.format_exc()[-500:]])
 
 
+def _run_audit_positive_gaps(
+    exp_path: Path, write: bool, mode: str
+) -> TechnicalPipelineStepResult:
+    started = now_iso()
+    step_id = "AUDIT_POSITIVE_GAPS"
+    try:
+        from eia_agent.core.positive_impact_gap_validator import (
+            validate_positive_gap_from_files,
+            write_positive_gap_outputs,
+        )
+        result = validate_positive_gap_from_files(exp_path)
+
+        outputs = []
+        if write:
+            aud_dir = exp_path / "auditoria"
+            json_p, md_p = write_positive_gap_outputs(result, aud_dir)
+            outputs = [str(json_p), str(md_p)]
+
+        status = "SUCCESS" if result.is_valid() else "WARNING"
+        return _step(
+            step_id, started, status,
+            message=result.summary()[:300],
+            output_files=outputs,
+            warnings=list(result.warnings),
+            notes=list(result.notes),
+        )
+    except Exception as exc:
+        return _step(step_id, started, "FAILED",
+                     errors=[_ascii_safe(str(exc))],
+                     notes=[traceback.format_exc()[-500:]])
+
+
 def _run_audit_final(
     exp_path: Path, write: bool, mode: str
 ) -> TechnicalPipelineStepResult:
@@ -1167,6 +1202,7 @@ _STEP_RUNNERS = {
     "PHASE6_GENERATE_PVA": _run_phase6_generate_pva,
     "PHASE6_VALIDATE_PVA": _run_phase6_validate_pva,
     "AUDIT_CONDITIONAL_CHAINS": _run_audit_conditional_chains,
+    "AUDIT_POSITIVE_GAPS": _run_audit_positive_gaps,
     "PHASE6_CUMULATIVE": _run_phase6_cumulative,
     "AUDIT_ART45": _run_audit_art45,
     "AUDIT_PRUDENCE": _run_audit_prudence,
@@ -1262,7 +1298,7 @@ def run_technical_pipeline(
         all_errors.extend(s.errors)
 
     notes = [
-        "Pipeline PIPE-01+PIPE-02+PIPE-03+PIPE-04: no declara aptitud administrativa.",
+        "Pipeline PIPE-01+PIPE-02+PIPE-03+PIPE-04+PIPE-05: no declara aptitud administrativa.",
         f"Modo: {mode} | write_outputs={write_outputs} | stop_on_error={stop_on_error}",
         f"Pasos ejecutados: {len(steps)} | Exitosos: {sum(1 for s in steps if s.is_success())}",
     ]

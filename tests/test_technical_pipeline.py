@@ -219,8 +219,8 @@ class TestTechnicalPipelineResult(unittest.TestCase):
         r = _make_pipeline_result(final_status="FAILED")
         self.assertIn("FAILED", r.summary())
 
-    def test_18_steps_expected(self) -> None:
-        self.assertEqual(len(TECHNICAL_PIPELINE_STEPS), 18)
+    def test_19_steps_expected(self) -> None:
+        self.assertEqual(len(TECHNICAL_PIPELINE_STEPS), 19)
 
     def test_audit_block_consistency_in_steps(self) -> None:
         self.assertIn("AUDIT_BLOCK_CONSISTENCY", TECHNICAL_PIPELINE_STEPS)
@@ -381,10 +381,10 @@ class TestRunPipelineEmptyExpediente(unittest.TestCase):
             result = run_technical_pipeline(tmp, write_outputs=False)
             self.assertIsInstance(result, TechnicalPipelineResult)
 
-    def test_empty_expediente_has_18_steps(self) -> None:
+    def test_empty_expediente_has_19_steps(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = run_technical_pipeline(tmp, write_outputs=False)
-            self.assertEqual(len(result.steps), 18)
+            self.assertEqual(len(result.steps), 19)
 
     def test_empty_expediente_not_all_success(self) -> None:
         # Empty expediente → some steps will fail or be skipped
@@ -513,7 +513,7 @@ class TestPipelineMocks(unittest.TestCase):
                 result = run_technical_pipeline(tmp)
             self.assertTrue(result.is_success())
             self.assertEqual(result.final_status, "SUCCESS")
-            self.assertEqual(result.success_count(), 18)
+            self.assertEqual(result.success_count(), 19)
 
     def test_step3_failed_stop_on_error_skips_rest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -967,6 +967,122 @@ class TestNewAuditStepsPIPE04(unittest.TestCase):
                 result = run_technical_pipeline(tmp)
             notes_text = " ".join(result.notes)
             self.assertIn("PIPE-04", notes_text)
+
+
+# ---------------------------------------------------------------------------
+# 7e. TestNewAuditStepsPIPE05
+# ---------------------------------------------------------------------------
+
+class TestNewAuditStepsPIPE05(unittest.TestCase):
+    """Tests para el paso AUDIT_POSITIVE_GAPS (PIPE-05 / RD-07)."""
+
+    def _patch_runners(self, statuses: dict[str, str]):
+        from unittest.mock import MagicMock
+        return {
+            s: MagicMock(return_value=_make_step(s, statuses.get(s, "SUCCESS")))
+            for s in TECHNICAL_PIPELINE_STEPS
+        }
+
+    def test_audit_positive_gaps_in_steps(self) -> None:
+        self.assertIn("AUDIT_POSITIVE_GAPS", TECHNICAL_PIPELINE_STEPS)
+
+    def test_audit_positive_gaps_after_conditional_chains(self) -> None:
+        idx_cc = TECHNICAL_PIPELINE_STEPS.index("AUDIT_CONDITIONAL_CHAINS")
+        idx_pg = TECHNICAL_PIPELINE_STEPS.index("AUDIT_POSITIVE_GAPS")
+        self.assertGreater(idx_pg, idx_cc)
+
+    def test_audit_positive_gaps_before_cumulative(self) -> None:
+        idx_pg = TECHNICAL_PIPELINE_STEPS.index("AUDIT_POSITIVE_GAPS")
+        idx_cum = TECHNICAL_PIPELINE_STEPS.index("PHASE6_CUMULATIVE")
+        self.assertLess(idx_pg, idx_cum)
+
+    def test_audit_positive_gaps_before_final(self) -> None:
+        idx_pg = TECHNICAL_PIPELINE_STEPS.index("AUDIT_POSITIVE_GAPS")
+        idx_final = TECHNICAL_PIPELINE_STEPS.index("AUDIT_FINAL")
+        self.assertLess(idx_pg, idx_final)
+
+    def test_audit_final_is_still_last(self) -> None:
+        self.assertEqual(TECHNICAL_PIPELINE_STEPS[-1], "AUDIT_FINAL")
+
+    def test_positive_gaps_included_in_all_success(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            all_ok = {s: "SUCCESS" for s in TECHNICAL_PIPELINE_STEPS}
+            patches = self._patch_runners(all_ok)
+            with patch.dict(
+                "eia_agent.core.technical_pipeline._STEP_RUNNERS", patches
+            ):
+                result = run_technical_pipeline(tmp)
+            step = next(
+                (s for s in result.steps if s.step_id == "AUDIT_POSITIVE_GAPS"), None
+            )
+            self.assertIsNotNone(step)
+            self.assertEqual(step.status, "SUCCESS")
+
+    def test_positive_gaps_failed_stop_on_error_skips_cumulative_and_final(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            patches = self._patch_runners({s: "SUCCESS" for s in TECHNICAL_PIPELINE_STEPS})
+            patches["AUDIT_POSITIVE_GAPS"] = MagicMock(
+                return_value=_make_step(
+                    "AUDIT_POSITIVE_GAPS", "FAILED", errors=["Error PG"]
+                )
+            )
+            with patch.dict(
+                "eia_agent.core.technical_pipeline._STEP_RUNNERS", patches
+            ):
+                result = run_technical_pipeline(tmp, stop_on_error=True)
+            cum_step = next(
+                (s for s in result.steps if s.step_id == "PHASE6_CUMULATIVE"), None
+            )
+            final_step = next(
+                (s for s in result.steps if s.step_id == "AUDIT_FINAL"), None
+            )
+            self.assertEqual(cum_step.status, "SKIPPED")
+            self.assertEqual(final_step.status, "SKIPPED")
+
+    def test_positive_gaps_failed_continue_on_error_runs_final(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            patches = self._patch_runners({s: "SUCCESS" for s in TECHNICAL_PIPELINE_STEPS})
+            patches["AUDIT_POSITIVE_GAPS"] = MagicMock(
+                return_value=_make_step(
+                    "AUDIT_POSITIVE_GAPS", "FAILED", errors=["Error PG"]
+                )
+            )
+            with patch.dict(
+                "eia_agent.core.technical_pipeline._STEP_RUNNERS", patches
+            ):
+                result = run_technical_pipeline(tmp, stop_on_error=False)
+            final_step = next(
+                (s for s in result.steps if s.step_id == "AUDIT_FINAL"), None
+            )
+            self.assertNotEqual(final_step.status, "SKIPPED")
+
+    def test_positive_gaps_outputs_aggregated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            patches = self._patch_runners({s: "SUCCESS" for s in TECHNICAL_PIPELINE_STEPS})
+            patches["AUDIT_POSITIVE_GAPS"] = MagicMock(
+                return_value=_make_step(
+                    "AUDIT_POSITIVE_GAPS", "SUCCESS",
+                    output_files=["auditoria/positive_gap_result.json"]
+                )
+            )
+            with patch.dict(
+                "eia_agent.core.technical_pipeline._STEP_RUNNERS", patches
+            ):
+                result = run_technical_pipeline(tmp)
+            self.assertIn(
+                "auditoria/positive_gap_result.json",
+                result.output_files,
+            )
+
+    def test_pipeline_notes_mention_pipe05(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            patches = self._patch_runners({s: "SUCCESS" for s in TECHNICAL_PIPELINE_STEPS})
+            with patch.dict(
+                "eia_agent.core.technical_pipeline._STEP_RUNNERS", patches
+            ):
+                result = run_technical_pipeline(tmp)
+            notes_text = " ".join(result.notes)
+            self.assertIn("PIPE-05", notes_text)
 
 
 # ---------------------------------------------------------------------------

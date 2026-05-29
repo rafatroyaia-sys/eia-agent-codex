@@ -56,6 +56,7 @@ AUDIT_SOURCE: list[str] = [
     "AU-03_TRACEABILITY",
     "RD-04_BLOCK_CONSISTENCY",
     "RD-06_CONESA_CHECK",
+    "RD-07_POSITIVE_GAPS",
     "RD-08_DIAGNOSTIC_MEASURES",
     "RD-09_PRL_MEASURES",
     "IM-09_CONDITIONAL_CHAINS",
@@ -160,6 +161,7 @@ class FinalAuditResult:
     diagnostic_measure_summary: dict = field(default_factory=dict)
     prl_measure_summary: dict = field(default_factory=dict)
     conditional_chain_summary: dict = field(default_factory=dict)
+    positive_gap_summary: dict = field(default_factory=dict)
 
     issues: list[FinalAuditIssue] = field(default_factory=list)
     blocking_count: int = 0
@@ -198,6 +200,7 @@ class FinalAuditResult:
             "diagnostic_measure_summary": self.diagnostic_measure_summary,
             "prl_measure_summary": self.prl_measure_summary,
             "conditional_chain_summary": self.conditional_chain_summary,
+            "positive_gap_summary": self.positive_gap_summary,
             "issues": [i.to_dict() for i in self.issues],
             "blocking_count": self.blocking_count,
             "high_count": self.high_count,
@@ -967,6 +970,79 @@ def extract_final_issues_from_conditional_chains(
 
 
 # ---------------------------------------------------------------------------
+# extract_final_issues_from_positive_gaps (RD-07)
+# ---------------------------------------------------------------------------
+
+def extract_final_issues_from_positive_gaps(
+    data: "dict | None",
+) -> "list[FinalAuditIssue]":
+    """Extrae incidencias del validador de impactos positivos con gaps ALTA (RD-07).
+
+    None → [] (backward compatible).
+    corrupt → ALTA.
+    SIN_DATOS → MEDIA.
+    ERROR → ALTA, WARNING → MEDIA.
+    """
+    if data is None:
+        return []
+
+    if data.get("corrupt"):
+        return [FinalAuditIssue(
+            severity="ALTA",
+            source="RD-07_POSITIVE_GAPS",
+            code="AU04-E901",
+            message=f"JSON de RD-07 corrupto: {data.get('error', 'error desconocido')}",
+            recommendation=(
+                "Regenerar: python run_expediente.py <exp> audit-positive-gaps --write"
+            ),
+        )]
+
+    issues: list[FinalAuditIssue] = []
+    status = data.get("status", "SIN_DATOS")
+
+    if status == "SIN_DATOS":
+        issues.append(FinalAuditIssue(
+            severity="MEDIA",
+            source="RD-07_POSITIVE_GAPS",
+            code="AU04-W902",
+            message=(
+                "RD-07: sin modelo Phase6 disponible para validar impactos positivos con gaps ALTA. "
+                "Ejecutar Fase 6 (IM-00 a IM-06) antes de esta auditoria."
+            ),
+            recommendation="Ejecutar phase6-generate-pva antes de audit-positive-gaps.",
+        ))
+        return issues
+
+    for iss in data.get("issues", []):
+        raw_sev = iss.get("severity", "")
+        msg = iss.get("message", "")
+        rec = iss.get("recommendation", "")
+        code = iss.get("code", "RD07-GEN-001")
+        imp_id = iss.get("impact_id")
+
+        if raw_sev == "ERROR":
+            issues.append(FinalAuditIssue(
+                severity="ALTA",
+                source="RD-07_POSITIVE_GAPS",
+                code=f"AU04-{code}",
+                message=msg,
+                recommendation=rec,
+                related_requirement=imp_id,
+            ))
+        elif raw_sev == "WARNING":
+            issues.append(FinalAuditIssue(
+                severity="MEDIA",
+                source="RD-07_POSITIVE_GAPS",
+                code=f"AU04-{code}",
+                message=msg,
+                recommendation=rec,
+                related_requirement=imp_id,
+            ))
+
+    return issues
+
+
+# ---------------------------------------------------------------------------
 # determine_final_audit_status
 # ---------------------------------------------------------------------------
 
@@ -1098,6 +1174,23 @@ def _build_summary_from_conditional_chains(data: dict | None) -> dict:
     }
 
 
+def _build_summary_from_positive_gaps(data: dict | None) -> dict:
+    if data is None:
+        return {"available": False}
+    if data.get("corrupt"):
+        return {"available": False, "corrupt": True}
+    return {
+        "available": True,
+        "status": data.get("status", "SIN_DATOS"),
+        "checked_impacts": len(data.get("checked_impacts", [])),
+        "positive_impacts": len(data.get("positive_impacts", [])),
+        "positive_impacts_with_high_gaps": len(data.get("positive_impacts_with_high_gaps", [])),
+        "error_count": data.get("error_count", 0),
+        "warning_count": data.get("warning_count", 0),
+        "is_valid": data.get("error_count", 1) == 0,
+    }
+
+
 def _build_summary_from_block_consistency(data: dict | None) -> dict:
     if data is None:
         return {"available": False}
@@ -1145,8 +1238,9 @@ def build_final_audit_result(
     diagnostic_measure_data: "dict | None" = None,
     prl_measure_data: "dict | None" = None,
     conditional_chain_data: "dict | None" = None,
+    positive_gap_data: "dict | None" = None,
 ) -> FinalAuditResult:
-    """Construye el resultado final de auditoría combinando AU-01/02/03 + RD-04/06/08/09 + IM-09.
+    """Construye el resultado final de auditoría combinando AU-01/02/03 + RD-04/06/07/08/09 + IM-09.
 
     Siempre devuelve un resultado válido. No lanza excepciones.
 
@@ -1160,6 +1254,7 @@ def build_final_audit_result(
         diagnostic_measure_data: dict de diagnostic_measure_validation_result.json o None (optativo).
         prl_measure_data: dict de prl_measure_validation_result.json o None (optativo).
         conditional_chain_data: dict de conditional_chain_result.json o None (optativo).
+        positive_gap_data: dict de positive_gap_result.json o None (optativo).
 
     Returns:
         FinalAuditResult con estado, conteos y lista de incidencias consolidadas.
@@ -1173,6 +1268,7 @@ def build_final_audit_result(
     all_issues.extend(extract_final_issues_from_diagnostic_measures(diagnostic_measure_data))
     all_issues.extend(extract_final_issues_from_prl_measures(prl_measure_data))
     all_issues.extend(extract_final_issues_from_conditional_chains(conditional_chain_data))
+    all_issues.extend(extract_final_issues_from_positive_gaps(positive_gap_data))
 
     status = determine_final_audit_status(all_issues)
 
@@ -1189,6 +1285,7 @@ def build_final_audit_result(
         f"Estado AU-03: {_avail(traceability_data)}.",
         f"Estado RD-04: {_avail(block_consistency_data)}.",
         f"Estado RD-06: {_avail(conesa_check_data)}.",
+        f"Estado RD-07: {_avail(positive_gap_data)}.",
         f"Estado RD-08: {_avail(diagnostic_measure_data)}.",
         f"Estado RD-09: {_avail(prl_measure_data)}.",
         f"Estado IM-09: {_avail(conditional_chain_data)}.",
@@ -1206,6 +1303,7 @@ def build_final_audit_result(
         diagnostic_measure_summary=_build_summary_from_diagnostic_measures(diagnostic_measure_data),
         prl_measure_summary=_build_summary_from_prl_measures(prl_measure_data),
         conditional_chain_summary=_build_summary_from_conditional_chains(conditional_chain_data),
+        positive_gap_summary=_build_summary_from_positive_gaps(positive_gap_data),
         issues=all_issues,
         blocking_count=blocking,
         high_count=high,
@@ -1364,8 +1462,30 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         )
     lines.append("")
 
-    # ── 9. Resultado IM-09 ──
-    lines.append("## 9. Resultado IM-09 — Cadenas condicionales impacto-medida-PVA")
+    # ── 9. Resultado RD-07 ──
+    lines.append("## 9. Resultado RD-07 — Impactos positivos con gaps ALTA")
+    lines.append("")
+    s9 = result.positive_gap_summary
+    if not s9.get("available"):
+        lines.append(
+            "_Auditoria RD-07 no disponible. Ejecute `audit-positive-gaps --write`._"
+        )
+    else:
+        lines.append(f"- Estado: {s9.get('status', '?')}")
+        lines.append(f"- Impactos revisados: {s9.get('checked_impacts', '?')}")
+        lines.append(f"- Impactos positivos: {s9.get('positive_impacts', '?')}")
+        lines.append(
+            f"- Positivos con gap ALTA: {s9.get('positive_impacts_with_high_gaps', '?')}"
+        )
+        lines.append(f"- Incidencias ERROR: {s9.get('error_count', '?')}")
+        lines.append(f"- Incidencias WARNING: {s9.get('warning_count', '?')}")
+        lines.append(
+            f"- Resultado: {'CONFORME' if s9.get('is_valid') else 'NO CONFORME'}"
+        )
+    lines.append("")
+
+    # ── 10. Resultado IM-09 ──
+    lines.append("## 10. Resultado IM-09 — Cadenas condicionales impacto-medida-PVA")
     lines.append("")
     s8 = result.conditional_chain_summary
     if not s8.get("available"):
@@ -1385,8 +1505,8 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         )
     lines.append("")
 
-    # ── 10. Incidencias BLOQUEANTE ──
-    lines.append("## 10. Incidencias bloqueantes")
+    # ── 11. Incidencias BLOQUEANTE ──
+    lines.append("## 11. Incidencias bloqueantes")
     lines.append("")
     blockers = [i for i in result.issues if i.severity == "BLOQUEANTE"]
     if blockers:
@@ -1399,8 +1519,8 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         lines.append("_Sin incidencias BLOQUEANTE._")
         lines.append("")
 
-    # ── 11. Incidencias ALTA ──
-    lines.append("## 11. Incidencias altas")
+    # ── 12. Incidencias ALTA ──
+    lines.append("## 12. Incidencias altas")
     lines.append("")
     highs = [i for i in result.issues if i.severity == "ALTA"]
     if highs:
@@ -1416,8 +1536,8 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         lines.append("_Sin incidencias ALTA._")
         lines.append("")
 
-    # ── 12. Incidencias MEDIA y BAJA ──
-    lines.append("## 12. Incidencias medias y bajas")
+    # ── 13. Incidencias MEDIA y BAJA ──
+    lines.append("## 13. Incidencias medias y bajas")
     lines.append("")
     mid_low = [i for i in result.issues if i.severity in ("MEDIA", "BAJA")]
     if mid_low:
@@ -1429,8 +1549,8 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         lines.append("_Sin incidencias MEDIA ni BAJA._")
     lines.append("")
 
-    # ── 13. Recomendaciones prioritarias ──
-    lines.append("## 13. Recomendaciones prioritarias")
+    # ── 14. Recomendaciones prioritarias ──
+    lines.append("## 14. Recomendaciones prioritarias")
     lines.append("")
     priority_issues = [
         i for i in result.issues if i.severity in ("BLOQUEANTE", "ALTA")
@@ -1448,13 +1568,13 @@ def build_final_audit_report_markdown(result: FinalAuditResult) -> str:
         )
     lines.append("")
 
-    # ── 14. Conclusión final ──
-    lines.append("## 14. Conclusion final")
+    # ── 15. Conclusión final ──
+    lines.append("## 15. Conclusion final")
     lines.append("")
     status_descriptions = {
         "CONFORME": (
             "El expediente supera las verificaciones internas de AU-01, AU-02, AU-03, "
-            "RD-04, RD-06, RD-08, RD-09 e IM-09 sin incidencias de severidad ALTA o BLOQUEANTE."
+            "RD-04, RD-06, RD-07, RD-08, RD-09 e IM-09 sin incidencias de severidad ALTA o BLOQUEANTE."
         ),
         "CONFORME_CON_OBSERVACIONES": (
             "El expediente presenta observaciones de severidad MEDIA o BAJA que deben "
@@ -1531,6 +1651,9 @@ def build_final_audit_from_files(
     conditional_chain_data = load_audit_json(
         auditoria_dir / "conditional_chain_result.json"
     )
+    positive_gap_data = load_audit_json(
+        auditoria_dir / "positive_gap_result.json"
+    )
 
     return build_final_audit_result(
         expediente_id=exp_path.name,
@@ -1542,6 +1665,7 @@ def build_final_audit_from_files(
         diagnostic_measure_data=diagnostic_measure_data,
         prl_measure_data=prl_measure_data,
         conditional_chain_data=conditional_chain_data,
+        positive_gap_data=positive_gap_data,
     )
 
 

@@ -1,4 +1,4 @@
-# TECHNICAL_PIPELINE — PIPE-01 + PIPE-02 + PIPE-03 + PIPE-04
+# TECHNICAL_PIPELINE — PIPE-01 + PIPE-02 + PIPE-03 + PIPE-04 + PIPE-05
 
 Módulo: `src/eia_agent/core/technical_pipeline.py`  
 CLI: `python run_expediente.py <expediente> run-technical-pipeline [--write] [--prod] [--continue-on-error]`  
@@ -8,7 +8,7 @@ Tests: `tests/test_technical_pipeline.py`
 
 ## Qué hace el pipeline
 
-Ejecuta en un único flujo, en orden, los 18 módulos técnicos ya construidos, desde el inventario ambiental (Fase 5) hasta el informe final de auditoría (AU-04 con RD-04, RD-06, RD-08, RD-09 e IM-09).
+Ejecuta en un único flujo, en orden, los 19 módulos técnicos ya construidos, desde el inventario ambiental (Fase 5) hasta el informe final de auditoría (AU-04 con RD-04, RD-06, RD-07, RD-08, RD-09 e IM-09).
 
 ```
 python run_expediente.py <expediente> run-technical-pipeline --write
@@ -43,15 +43,16 @@ Los pasos se encadenan automáticamente: el output de cada paso es el input del 
 | 7 | PHASE6_GENERATE_PVA | `phase6-generate-pva --write` | `impactos/phase6_model_with_pva.json` |
 | 8 | PHASE6_VALIDATE_PVA | `phase6-validate-pva --write` | `impactos/pva_coverage_result.json` |
 | 9 | AUDIT_CONDITIONAL_CHAINS | `audit-conditional-chains --write` | `auditoria/conditional_chain_result.json` |
-| 10 | PHASE6_CUMULATIVE | `phase6-cumulative --write` | `impactos/cumulative_synergistic_result.json` |
-| 11 | AUDIT_ART45 | `audit-art45 --write` | `auditoria/art45_checklist_result.json` |
-| 12 | AUDIT_PRUDENCE | `audit-prudence --write` | `auditoria/prudence_validation_result.json` |
-| 13 | AUDIT_TRACEABILITY | `audit-traceability --write` | `auditoria/traceability_validation_result.json` |
-| 14 | AUDIT_BLOCK_CONSISTENCY | `audit-block-consistency --write` | `auditoria/block_consistency_result.json` |
-| 15 | AUDIT_CONESA | `audit-conesa --write` | `auditoria/conesa_check_result.json` |
-| 16 | AUDIT_DIAGNOSTIC_MEASURES | `audit-diagnostic-measures --write` | `auditoria/diagnostic_measure_validation_result.json` |
-| 17 | AUDIT_PRL_MEASURES | `audit-prl-measures --write` | `auditoria/prl_measure_validation_result.json` |
-| 18 | AUDIT_FINAL | `audit-final --write` | `auditoria/final_audit_result.json` |
+| 10 | AUDIT_POSITIVE_GAPS | `audit-positive-gaps --write` | `auditoria/positive_gap_result.json` |
+| 11 | PHASE6_CUMULATIVE | `phase6-cumulative --write` | `impactos/cumulative_synergistic_result.json` |
+| 12 | AUDIT_ART45 | `audit-art45 --write` | `auditoria/art45_checklist_result.json` |
+| 13 | AUDIT_PRUDENCE | `audit-prudence --write` | `auditoria/prudence_validation_result.json` |
+| 14 | AUDIT_TRACEABILITY | `audit-traceability --write` | `auditoria/traceability_validation_result.json` |
+| 15 | AUDIT_BLOCK_CONSISTENCY | `audit-block-consistency --write` | `auditoria/block_consistency_result.json` |
+| 16 | AUDIT_CONESA | `audit-conesa --write` | `auditoria/conesa_check_result.json` |
+| 17 | AUDIT_DIAGNOSTIC_MEASURES | `audit-diagnostic-measures --write` | `auditoria/diagnostic_measure_validation_result.json` |
+| 18 | AUDIT_PRL_MEASURES | `audit-prl-measures --write` | `auditoria/prl_measure_validation_result.json` |
+| 19 | AUDIT_FINAL | `audit-final --write` | `auditoria/final_audit_result.json` |
 
 ---
 

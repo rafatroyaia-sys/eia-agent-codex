@@ -2,7 +2,7 @@
 
 Módulo: `src/eia_agent/core/final_audit_report.py`  
 CLI: `python run_expediente.py <expediente> audit-final [--write]`  
-Tests: `tests/test_final_audit_report.py` (104 + nuevos RD-04/RD-06 tests)
+Tests: `tests/test_final_audit_report.py` (104 + nuevos RD-04/RD-06/RD-07/RD-08/RD-09/IM-09 tests)
 
 ---
 
@@ -17,11 +17,12 @@ Combina los resultados de las auditorías previas en un **informe final ejecutiv
 | AU-03 | traceability_validator | `auditoria/traceability_validation_result.json` |
 | RD-04 | block_consistency_validator | `auditoria/block_consistency_result.json` |
 | RD-06 | conesa_checker | `auditoria/conesa_check_result.json` |
+| RD-07 | positive_impact_gap_validator | `auditoria/positive_gap_result.json` |
 | RD-08 | diagnostic_measure_validator | `auditoria/diagnostic_measure_validation_result.json` |
 | RD-09 | prl_measure_validator | `auditoria/prl_measure_validation_result.json` |
 | IM-09 | conditional_chain_validator | `auditoria/conditional_chain_result.json` |
 
-RD-04, RD-06, RD-08, RD-09 e IM-09 son opcionales: si el archivo no existe, no se genera ninguna incidencia adicional (retrocompatible con expedientes que solo tienen AU-01/02/03).
+RD-04, RD-06, RD-07, RD-08, RD-09 e IM-09 son opcionales: si el archivo no existe, no se genera ninguna incidencia adicional (retrocompatible con expedientes que solo tienen AU-01/02/03).
 
 Emite una calificación final (`CONFORME`, `CONFORME_CON_OBSERVACIONES`, `NO_CONFORME`, `INCOMPLETO`) y un informe en JSON y Markdown con incidencias ordenadas por severidad.
 
@@ -29,7 +30,7 @@ Emite una calificación final (`CONFORME`, `CONFORME_CON_OBSERVACIONES`, `NO_CON
 
 ## Qué NO hace AU-04
 
-- **No ejecuta AU-01, AU-02, AU-03, RD-04, RD-06, RD-08, RD-09 ni IM-09 automáticamente.** Solo combina sus resultados existentes.
+- **No ejecuta AU-01, AU-02, AU-03, RD-04, RD-06, RD-07, RD-08, RD-09 ni IM-09 automáticamente.** Solo combina sus resultados existentes.
 - **No corrige textos** del expediente.
 - **No declara aptitud administrativa.** La calificación es interna.
 - **No sustituye la revisión técnica ni jurídica** del Documento Ambiental.
@@ -39,7 +40,7 @@ Emite una calificación final (`CONFORME`, `CONFORME_CON_OBSERVACIONES`, `NO_CON
 
 ---
 
-## Cómo combina AU-01 + AU-02 + AU-03 + RD-04 + RD-06 + RD-08 + RD-09 + IM-09
+## Cómo combina AU-01 + AU-02 + AU-03 + RD-04 + RD-06 + RD-07 + RD-08 + RD-09 + IM-09
 
 ### De AU-01 (Checklist art.45):
 
@@ -118,6 +119,18 @@ Emite una calificación final (`CONFORME`, `CONFORME_CON_OBSERVACIONES`, `NO_CON
 | Issue `ERROR` de RD-09 | ALTA |
 | Issue `WARNING` de RD-09 | MEDIA |
 
+### De RD-07 (Impactos positivos con gaps ALTA):
+
+| Situación | Severidad final |
+|-----------|----------------|
+| No disponible (None) | Sin incidencia — sin cambio de estado (retrocompatible) |
+| Resultado corrupto | ALTA (AU04-E901) |
+| `SIN_DATOS` | MEDIA (AU04-W902) |
+| Issue `ERROR` de RD-07 | ALTA |
+| Issue `WARNING` de RD-07 | MEDIA |
+
+RD-07 verifica que los impactos positivos con gaps de criticidad ALTA mantienen esa incertidumbre visible en el modelo y en el Markdown del documento, y que no usan lenguaje de cierre o compensación prohibido cuando el impacto aún no está acreditado.
+
 ### De IM-09 (Cadenas condicionales impacto-medida-PVA):
 
 | Situación | Severidad final |
@@ -136,7 +149,7 @@ IM-09 verifica que las condiciones (GAP, CONT, AT, marcadores de texto) sean vis
 
 | Estado | Condición |
 |--------|-----------|
-| `INCOMPLETO` | Falta alguna de las tres auditorías AU-01/AU-02/AU-03 (RD-04/RD-06/RD-08/RD-09/IM-09 son opcionales) |
+| `INCOMPLETO` | Falta alguna de las tres auditorías AU-01/AU-02/AU-03 (RD-04/RD-06/RD-07/RD-08/RD-09/IM-09 son opcionales) |
 | `NO_CONFORME` | Hay incidencias BLOQUEANTE o ALTA |
 | `CONFORME_CON_OBSERVACIONES` | Hay incidencias MEDIA o BAJA (sin BLOQUEANTE ni ALTA) |
 | `CONFORME` | Solo incidencias INFO o ninguna |

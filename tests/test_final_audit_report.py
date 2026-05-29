@@ -40,6 +40,7 @@ from eia_agent.core.final_audit_report import (
     extract_final_issues_from_conesa_check,
     extract_final_issues_from_conditional_chains,
     extract_final_issues_from_diagnostic_measures,
+    extract_final_issues_from_positive_gaps,
     extract_final_issues_from_prl_measures,
     extract_final_issues_from_prudence,
     extract_final_issues_from_traceability,
@@ -755,29 +756,33 @@ class TestBuildFinalAuditReportMarkdown(unittest.TestCase):
         md = build_final_audit_report_markdown(self._result_no_conforme())
         self.assertIn("## 6. Resultado RD-06", md)
 
-    def test_has_section_9_im09(self) -> None:
+    def test_has_section_9_rd07(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 9. Resultado IM-09", md)
+        self.assertIn("## 9. Resultado RD-07", md)
 
-    def test_has_section_10_bloqueantes(self) -> None:
+    def test_has_section_10_im09(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 10. Incidencias bloqueantes", md)
+        self.assertIn("## 10. Resultado IM-09", md)
 
-    def test_has_section_11_altas(self) -> None:
+    def test_has_section_11_bloqueantes(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 11. Incidencias altas", md)
+        self.assertIn("## 11. Incidencias bloqueantes", md)
 
-    def test_has_section_12_medias_bajas(self) -> None:
+    def test_has_section_12_altas(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 12. Incidencias medias y bajas", md)
+        self.assertIn("## 12. Incidencias altas", md)
 
-    def test_has_section_13_recomendaciones(self) -> None:
+    def test_has_section_13_medias_bajas(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 13. Recomendaciones prioritarias", md)
+        self.assertIn("## 13. Incidencias medias y bajas", md)
 
-    def test_has_section_14_conclusion(self) -> None:
+    def test_has_section_14_recomendaciones(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
-        self.assertIn("## 14. Conclusion final", md)
+        self.assertIn("## 14. Recomendaciones prioritarias", md)
+
+    def test_has_section_15_conclusion(self) -> None:
+        md = build_final_audit_report_markdown(self._result_no_conforme())
+        self.assertIn("## 15. Conclusion final", md)
 
     def test_no_declara_aptitud_administrativa(self) -> None:
         md = build_final_audit_report_markdown(self._result_no_conforme())
@@ -915,7 +920,7 @@ class TestWriteFinalAuditOutputs(unittest.TestCase):
             _, md_path = write_final_audit_outputs(self._make_result(), out)
             content = md_path.read_text(encoding="utf-8")
             self.assertIn("## 1. Resumen ejecutivo", content)
-            self.assertIn("## 14. Conclusion final", content)
+            self.assertIn("## 15. Conclusion final", content)
 
     def test_creates_output_dir(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -2031,6 +2036,247 @@ class TestBuildFinalAuditFromFilesWithIM09(unittest.TestCase):
             result = build_final_audit_from_files(tmp)
             self.assertEqual(result.status, "CONFORME")
             self.assertFalse(result.conditional_chain_summary.get("available"))
+
+
+# ---------------------------------------------------------------------------
+# Helpers para RD-07
+# ---------------------------------------------------------------------------
+
+def _positive_gap_data_ok() -> dict:
+    return {
+        "status": "OK",
+        "checked_impacts": ["IMP-01", "IMP-02"],
+        "positive_impacts": ["IMP-01"],
+        "positive_impacts_with_high_gaps": [],
+        "error_count": 0,
+        "warning_count": 0,
+        "issues": [],
+    }
+
+
+def _positive_gap_data_errors() -> dict:
+    return {
+        "status": "NO_CONFORME",
+        "checked_impacts": ["IMP-01"],
+        "positive_impacts": ["IMP-01"],
+        "positive_impacts_with_high_gaps": ["IMP-01"],
+        "error_count": 1,
+        "warning_count": 0,
+        "issues": [
+            {
+                "severity": "ERROR",
+                "code": "RD07-E001",
+                "message": "Impacto positivo IMP-01 sin nota de incertidumbre",
+                "recommendation": "Anadir nota de incertidumbre",
+                "impact_id": "IMP-01",
+            }
+        ],
+    }
+
+
+def _positive_gap_data_warnings() -> dict:
+    return {
+        "status": "CON_OBSERVACIONES",
+        "checked_impacts": ["IMP-01"],
+        "positive_impacts": ["IMP-01"],
+        "positive_impacts_with_high_gaps": [],
+        "error_count": 0,
+        "warning_count": 1,
+        "issues": [
+            {
+                "severity": "WARNING",
+                "code": "RD07-W001",
+                "message": "Impacto positivo IMP-01 parece estimado",
+                "recommendation": "Anadir nota explícita de incertidumbre",
+                "impact_id": "IMP-01",
+            }
+        ],
+    }
+
+
+# ---------------------------------------------------------------------------
+# 21. TestExtractFinalIssuesFromPositiveGaps (RD-07)
+# ---------------------------------------------------------------------------
+
+class TestExtractFinalIssuesFromPositiveGaps(unittest.TestCase):
+
+    def test_none_returns_empty(self) -> None:
+        issues = extract_final_issues_from_positive_gaps(None)
+        self.assertEqual(issues, [])
+
+    def test_none_no_incompleto(self) -> None:
+        issues = extract_final_issues_from_positive_gaps(None)
+        self.assertFalse(any(i.code.startswith(_MISSING_CODE_PREFIX) for i in issues))
+
+    def test_clean_data_no_issues(self) -> None:
+        issues = extract_final_issues_from_positive_gaps(_positive_gap_data_ok())
+        self.assertEqual(issues, [])
+
+    def test_error_generates_alta(self) -> None:
+        issues = extract_final_issues_from_positive_gaps(_positive_gap_data_errors())
+        self.assertTrue(any(i.severity == "ALTA" for i in issues))
+
+    def test_warning_generates_media(self) -> None:
+        issues = extract_final_issues_from_positive_gaps(_positive_gap_data_warnings())
+        self.assertTrue(any(i.severity == "MEDIA" for i in issues))
+
+    def test_sin_datos_generates_media(self) -> None:
+        data = {"status": "SIN_DATOS", "issues": []}
+        issues = extract_final_issues_from_positive_gaps(data)
+        self.assertTrue(any(i.severity == "MEDIA" for i in issues))
+
+    def test_corrupt_generates_alta(self) -> None:
+        data = {"corrupt": True, "error": "json error"}
+        issues = extract_final_issues_from_positive_gaps(data)
+        self.assertEqual(len(issues), 1)
+        self.assertEqual(issues[0].severity, "ALTA")
+
+    def test_source_is_rd07(self) -> None:
+        issues = extract_final_issues_from_positive_gaps(_positive_gap_data_errors())
+        self.assertTrue(all("RD-07" in i.source for i in issues))
+
+    def test_rd07_in_audit_source_list(self) -> None:
+        from eia_agent.core.final_audit_report import AUDIT_SOURCE
+        self.assertIn("RD-07_POSITIVE_GAPS", AUDIT_SOURCE)
+
+    def test_build_result_with_positive_gap_ok_is_conforme(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            positive_gap_data=_positive_gap_data_ok(),
+        )
+        self.assertEqual(result.status, "CONFORME")
+
+    def test_build_result_with_positive_gap_errors_is_no_conforme(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            positive_gap_data=_positive_gap_data_errors(),
+        )
+        self.assertEqual(result.status, "NO_CONFORME")
+
+    def test_build_result_with_positive_gap_warnings_is_con_observaciones(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            positive_gap_data=_positive_gap_data_warnings(),
+        )
+        self.assertEqual(result.status, "CONFORME_CON_OBSERVACIONES")
+
+    def test_positive_gap_summary_in_result(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            positive_gap_data=_positive_gap_data_ok(),
+        )
+        self.assertIn("available", result.positive_gap_summary)
+        self.assertTrue(result.positive_gap_summary["available"])
+
+    def test_to_dict_contains_positive_gap_summary(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+        )
+        d = result.to_dict()
+        self.assertIn("positive_gap_summary", d)
+
+    def test_markdown_has_rd07_section(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            positive_gap_data=_positive_gap_data_ok(),
+        )
+        md = build_final_audit_report_markdown(result)
+        self.assertIn("RD-07", md)
+
+    def test_notes_contain_rd07_estado(self) -> None:
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            positive_gap_data=_positive_gap_data_ok(),
+        )
+        notes_text = " ".join(result.notes)
+        self.assertIn("RD-07", notes_text)
+
+    def test_is_valid_true_when_no_errors(self) -> None:
+        data_no_is_valid = {
+            "status": "OK",
+            "checked_impacts": ["IMP-01"],
+            "positive_impacts": ["IMP-01"],
+            "positive_impacts_with_high_gaps": [],
+            "error_count": 0,
+            "warning_count": 0,
+            "issues": [],
+        }
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            positive_gap_data=data_no_is_valid,
+        )
+        self.assertTrue(result.positive_gap_summary.get("is_valid"),
+                        "is_valid debe ser True cuando error_count=0")
+
+    def test_with_rd07_ok_conforme_from_files(self) -> None:
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            aud = Path(tmp) / "auditoria"
+            aud.mkdir()
+            (aud / "art45_checklist_result.json").write_text(
+                json.dumps(_art45_data_ok()), encoding="utf-8"
+            )
+            (aud / "prudence_validation_result.json").write_text(
+                json.dumps(_prudence_data_ok()), encoding="utf-8"
+            )
+            (aud / "traceability_validation_result.json").write_text(
+                json.dumps(_traceability_data_ok()), encoding="utf-8"
+            )
+            (aud / "positive_gap_result.json").write_text(
+                json.dumps(_positive_gap_data_ok()), encoding="utf-8"
+            )
+            result = build_final_audit_from_files(tmp)
+            self.assertEqual(result.status, "CONFORME")
+            self.assertTrue(result.positive_gap_summary.get("available"))
+
+    def test_with_rd07_errors_no_conforme_from_files(self) -> None:
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            aud = Path(tmp) / "auditoria"
+            aud.mkdir()
+            (aud / "art45_checklist_result.json").write_text(
+                json.dumps(_art45_data_ok()), encoding="utf-8"
+            )
+            (aud / "prudence_validation_result.json").write_text(
+                json.dumps(_prudence_data_ok()), encoding="utf-8"
+            )
+            (aud / "traceability_validation_result.json").write_text(
+                json.dumps(_traceability_data_ok()), encoding="utf-8"
+            )
+            (aud / "positive_gap_result.json").write_text(
+                json.dumps(_positive_gap_data_errors()), encoding="utf-8"
+            )
+            result = build_final_audit_from_files(tmp)
+            self.assertEqual(result.status, "NO_CONFORME")
+
+    def test_without_rd07_file_conforme_from_files(self) -> None:
+        import json, tempfile
+        from pathlib import Path
+        with tempfile.TemporaryDirectory() as tmp:
+            aud = Path(tmp) / "auditoria"
+            aud.mkdir()
+            (aud / "art45_checklist_result.json").write_text(
+                json.dumps(_art45_data_ok()), encoding="utf-8"
+            )
+            (aud / "prudence_validation_result.json").write_text(
+                json.dumps(_prudence_data_ok()), encoding="utf-8"
+            )
+            (aud / "traceability_validation_result.json").write_text(
+                json.dumps(_traceability_data_ok()), encoding="utf-8"
+            )
+            result = build_final_audit_from_files(tmp)
+            self.assertEqual(result.status, "CONFORME")
+            self.assertFalse(result.positive_gap_summary.get("available"))
 
 
 if __name__ == "__main__":
