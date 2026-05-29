@@ -1094,7 +1094,7 @@ def _build_summary_from_conditional_chains(data: dict | None) -> dict:
         "conditioned_pva_programs": len(data.get("conditioned_pva_programs", [])),
         "error_count": data.get("error_count", 0),
         "warning_count": data.get("warning_count", 0),
-        "is_valid": data.get("is_valid", False),
+        "is_valid": data.get("error_count", 1) == 0,
     }
 
 

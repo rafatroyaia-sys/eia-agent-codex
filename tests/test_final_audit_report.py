@@ -1948,6 +1948,27 @@ class TestBuildFinalAuditResultWithIM09(unittest.TestCase):
         notes_text = " ".join(result.notes)
         self.assertIn("IM-09", notes_text)
 
+    def test_summary_is_valid_true_when_no_errors_and_no_is_valid_key(self) -> None:
+        # Regresión: to_dict() de ConditionalChainResult no serializa is_valid;
+        # el summary debe derivarlo de error_count, no del campo ausente.
+        data_without_is_valid_key = {
+            "status": "OK",
+            "checked_impacts": ["IMP-001"],
+            "conditioned_impacts": [],
+            "conditioned_measures": [],
+            "conditioned_pva_programs": [],
+            "issues": [],
+            "error_count": 0,
+            "warning_count": 0,
+        }
+        result = build_final_audit_result(
+            "EIA-TEST",
+            _art45_data_ok(), _prudence_data_ok(), _traceability_data_ok(),
+            conditional_chain_data=data_without_is_valid_key,
+        )
+        self.assertTrue(result.conditional_chain_summary.get("is_valid"),
+                        "is_valid debe ser True cuando error_count=0, aunque no esté en el JSON")
+
 
 # ---------------------------------------------------------------------------
 # 22. TestBuildFinalAuditFromFilesWithIM09
