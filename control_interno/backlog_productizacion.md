@@ -235,6 +235,7 @@
 | BE-03 | Almacenamiento: estructura de carpetas por expediente en disco (compatible con el piloto) | P1 | S | — | ✅ COMPLETADO 2026-05-29 | `expediente_initializer.py`, 94 tests, CLI `init-expediente`, suite 6600 OK |
 | QA-BE03 | Prueba real de inicialización de expediente limpio | P1 | S | BE-03 | ✅ COMPLETADO 2026-05-29 | 5/5 pruebas OK, 0 bugs, suite 6600 OK |
 | BE-04 | Gestión de AEMET API key: configuración segura, no hardcoded | P1 | S | CL-01 | ✅ COMPLETADO 2026-05-29 | `config_manager.py`, 99 tests, CLI `config-check` + `secrets-scan`, .gitignore actualizado, suite 6699 OK |
+| QA-BE04 | Prueba real de configuración segura y escaneo de secretos | P1 | S | BE-04 | ✅ COMPLETADO 2026-05-29 | 8/8 pruebas OK, 0 bugs, 0 claves reales expuestas, 2 incidencias informativas, suite 6699 OK |
 | BE-05 | Worker asíncrono para tareas largas (generación de mapas, llamadas WMS): evitar timeouts | P2 | L | BE-01, CA-02 | ❌ No existe | |
 | BE-06 | Logging estructurado: trazabilidad de cada llamada LLM + herramienta + tiempo de respuesta | P2 | M | NL-06 | ❌ No existe | |
 
