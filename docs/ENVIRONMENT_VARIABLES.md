@@ -93,12 +93,20 @@ EIA_ENV=local
 ## Verificar configuración
 
 ```bash
-# Comprobar que AEMET_API_KEY está disponible antes de Fase 4
-python run_expediente.py PARCELA phase4-precheck
+# Validar todas las variables conocidas (BE-04)
+python run_expediente.py <expediente> config-check
+
+# Con escritura de informe
+python run_expediente.py <expediente> config-check --write
+
+# Escanear secretos potenciales en el repositorio
+python run_expediente.py <expediente> secrets-scan
 
 # O directamente desde Python
 python -c "import os; print('AEMET OK' if os.getenv('AEMET_API_KEY') else 'AEMET NO CONFIGURADA')"
 ```
+
+Ver `docs/CONFIG_MANAGER.md` para documentación completa de BE-04.
 
 ---
 

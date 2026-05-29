@@ -5,7 +5,8 @@ Runner básico para EIA-Agent v2.1.
 
 No ejecuta agentes reales ni genera fases.
 Proporciona acceso desde consola a los módulos de productización:
-  init-expediente, status, validate, gate, recover, log-summary,
+  init-expediente, config-check, secrets-scan,
+  status, validate, gate, recover, log-summary,
   phase1, phase2, phase3, phase4-precheck, phase4-climate,
   cartography-plan, schematic-maps, phase4-offline,
   inventory-build, inventory-gate,
@@ -18,6 +19,8 @@ Proporciona acceso desde consola a los módulos de productización:
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
+    python run_expediente.py <expediente> config-check [--write]
+    python run_expediente.py <expediente> secrets-scan [--write]
     python run_expediente.py <expediente> status
     python run_expediente.py <expediente> validate
     python run_expediente.py <expediente> gate <fase> [--prod]
@@ -1699,6 +1702,74 @@ def cmd_init_expediente(exp_path: Path, force: bool, with_guides: bool) -> int:
     return 1
 
 
+def cmd_config_check(exp_path: Path, write: bool) -> int:
+    """Valida variables de entorno conocidas (BE-04). Sin llamadas externas."""
+    from eia_agent.core.config_manager import (
+        validate_config,
+        write_config_validation_outputs,
+    )
+
+    # Buscar .env en raíz del proyecto o en el expediente
+    project_root = Path(__file__).parent
+    dotenv_path = project_root / ".env"
+    if not dotenv_path.exists():
+        dotenv_path = exp_path / ".env"
+        if not dotenv_path.exists():
+            dotenv_path = None
+
+    result = validate_config(dotenv_path=dotenv_path)
+    print(result.summary())
+
+    if write:
+        out_dir = exp_path / "control_interno"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            json_path, md_path = write_config_validation_outputs(result, out_dir)
+            print(f"\nOutputs escritos:")
+            print(f"  {json_path}")
+            print(f"  {md_path}")
+        except Exception as exc:
+            print(f"Aviso: no se pudo escribir output: {exc}", file=sys.stderr)
+
+    return 0 if result.is_valid() else 1
+
+
+def cmd_secrets_scan(exp_path: Path, write: bool) -> int:
+    """Escanea el repositorio en busca de secretos potenciales (BE-04). Sin llamadas externas."""
+    from eia_agent.core.config_manager import (
+        scan_repo_for_potential_secrets,
+        write_config_validation_outputs,
+    )
+
+    # Escanear raíz del proyecto
+    project_root = Path(__file__).parent
+    result = scan_repo_for_potential_secrets(project_root)
+    print(result.summary())
+
+    if result.issues:
+        print()
+        for issue in result.issues[:15]:
+            print(f"  [{issue.severity}] {issue.message}")
+        if len(result.issues) > 15:
+            print(f"  ... y {len(result.issues) - 15} hallazgos más.")
+        print()
+        print("  AVISO: Este informe no muestra secretos completos.")
+        print("  Verifique manualmente los archivos indicados.")
+
+    if write:
+        out_dir = exp_path / "control_interno"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            json_path, md_path = write_config_validation_outputs(result, out_dir)
+            print(f"\nOutputs escritos:")
+            print(f"  {json_path}")
+            print(f"  {md_path}")
+        except Exception as exc:
+            print(f"Aviso: no se pudo escribir output: {exc}", file=sys.stderr)
+
+    return 0 if result.error_count() == 0 else 1
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -1762,6 +1833,37 @@ Ejemplos:
     parser.add_argument("expediente", help="Ruta al directorio del expediente EIA")
 
     sub = parser.add_subparsers(dest="command", required=True, metavar="COMANDO")
+
+    cfg_p = sub.add_parser(
+        "config-check",
+        help=(
+            "Validar variables de entorno conocidas (BE-04). "
+            "Lee .env si existe. Sin llamadas externas ni validación contra APIs."
+        ),
+    )
+    cfg_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir control_interno/config_validation_result.json y .md. "
+            "Los valores sensibles aparecen siempre enmascarados."
+        ),
+    )
+
+    scan_p = sub.add_parser(
+        "secrets-scan",
+        help=(
+            "Escanear el repositorio en busca de secretos potenciales (BE-04). "
+            "No imprime secretos reales. Sin llamadas externas."
+        ),
+    )
+    scan_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir informe de escaneo en control_interno/config_validation_result.json y .md."
+        ),
+    )
 
     init_p = sub.add_parser(
         "init-expediente",
@@ -2364,6 +2466,14 @@ def main(argv=None) -> int:
         with_guides = not getattr(args, "no_guides", False)
         force = getattr(args, "force", False)
         return cmd_init_expediente(exp_path, force=force, with_guides=with_guides)
+
+    # config-check / secrets-scan: no requieren que el expediente exista (BE-04)
+    if args.command == "config-check":
+        exp_path = Path(args.expediente).resolve()
+        return cmd_config_check(exp_path, write=getattr(args, "write", False))
+    if args.command == "secrets-scan":
+        exp_path = Path(args.expediente).resolve()
+        return cmd_secrets_scan(exp_path, write=getattr(args, "write", False))
 
     exp_path = Path(args.expediente).resolve()
     if not exp_path.exists():

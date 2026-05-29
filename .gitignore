@@ -21,8 +21,10 @@ env/
 htmlcov/
 .tox/
 
-# Environment / secrets
+# Environment / secrets — nunca versionar claves reales
 .env
+.env.*
+!.env.example
 *.env.local
 *.env.*.local
 
@@ -54,8 +56,8 @@ desktop.ini
 *.jpeg
 *.svg
 
-# Expedientes piloto (datos propietarios)
-expediente-EIA-2026-RECIMETAL-*/
+# Expedientes EIA (datos propietarios — nunca versionar)
+expediente-EIA-*/
 
 # Mapas / cartografia generados
 cartografia/mapas/
