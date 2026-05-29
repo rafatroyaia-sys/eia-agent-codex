@@ -42,7 +42,7 @@ No se construye frontend hasta que el núcleo esté suficientemente maduro para 
 - ~~**INST-01**: Instalador multiplataforma~~ — **COMPLETADO ✅ 2026-04-20**
 - ~~**ASSETS-01**: Recursos de marca (logo, colores, usos)~~ — **COMPLETADO ✅ 2026-04-26** (`assets/brand/` + `docs/BRAND_ASSETS.md`, logo pendiente de colocar)
 - ~~**SOURCES-01**: Catálogo de fuentes EIA (30 fuentes)~~ — **COMPLETADO ✅ 2026-04-26** (`config/reference_sources/eia_sources_catalog.json` + `docs/EIA_SOURCES_CATALOG.md`, estado REFERENCIA_MANUAL)
-- **BE-03**: Estructura de carpetas como función Python
+- ~~**BE-03**: Estructura de carpetas como función Python~~ — **COMPLETADO ✅ 2026-05-29** (94 tests OK, `src/eia_agent/core/expediente_initializer.py`, `sanitize_expediente_id`+`initialize_expediente`+`write_standard_guides`+`ExpedienteInitResult`, 20 dirs+5 guías+metadata JSON, CLI `init-expediente [--force] [--no-guides]`, sin IA/web/APIs/modificar pilotos, suite 6600 OK, `docs/EXPEDIENTE_INITIALIZER.md`)
 - **BE-04**: Gestión segura de AEMET API key
 - ~~**NL-05**: Clase `EvidenceState` con transiciones~~ — **COMPLETADO ✅ 2026-04-19** (15 estados, 8 métodos, 58 tests OK)
 - ~~**NL-01**: JSON Schema v2.1 formalizado para las 6 capas~~ — **COMPLETADO ✅ 2026-04-20** (7 schemas, 27 tests OK, pilotos PARCELA y NAVE-222 validan)

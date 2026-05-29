@@ -5,18 +5,19 @@ Runner básico para EIA-Agent v2.1.
 
 No ejecuta agentes reales ni genera fases.
 Proporciona acceso desde consola a los módulos de productización:
-  status, validate, gate, recover, log-summary, phase1, phase2, phase3,
-  phase4-precheck, phase4-climate, cartography-plan, schematic-maps,
-  phase4-offline, inventory-build, inventory-gate,
+  init-expediente, status, validate, gate, recover, log-summary,
+  phase1, phase2, phase3, phase4-precheck, phase4-climate,
+  cartography-plan, schematic-maps, phase4-offline,
+  inventory-build, inventory-gate,
   phase6-actions, phase6-identify-impacts, phase6-assign-conesa,
   phase6-generate-measures, phase6-generate-pva,
   phase6-validate-pva, phase6-cumulative, audit-art45, audit-prudence,
   document-manifest, document-build-md, document-build-docx,
   document-insert-figures, document-qc, document-package, document-export,
-  document-prepare-presentation,
-  audit-positive-gaps.
+  document-prepare-presentation, audit-positive-gaps.
 
 Uso:
+    python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
     python run_expediente.py <expediente> status
     python run_expediente.py <expediente> validate
     python run_expediente.py <expediente> gate <fase> [--prod]
@@ -1676,6 +1677,28 @@ def cmd_inventory_gate(exp_path: Path, write: bool, prod: bool) -> int:
         return 1
 
 
+def cmd_init_expediente(exp_path: Path, force: bool, with_guides: bool) -> int:
+    """Inicializa la estructura estandar de un expediente EIA-Agent (BE-03)."""
+    from eia_agent.core.expediente_initializer import (
+        initialize_expediente,
+        write_init_result,
+    )
+
+    result = initialize_expediente(exp_path, force=force, with_guides=with_guides)
+    print(result.summary())
+
+    if result.is_success():
+        result_path = exp_path / "control_interno" / "init_expediente_result.json"
+        try:
+            write_init_result(result, result_path)
+            print(f"\nResultado escrito en: {result_path}")
+        except Exception as exc:
+            print(f"Aviso: no se pudo escribir result JSON: {exc}", file=sys.stderr)
+        return 0
+
+    return 1
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -1739,6 +1762,25 @@ Ejemplos:
     parser.add_argument("expediente", help="Ruta al directorio del expediente EIA")
 
     sub = parser.add_subparsers(dest="command", required=True, metavar="COMANDO")
+
+    init_p = sub.add_parser(
+        "init-expediente",
+        help=(
+            "Inicializar estructura estandar de carpetas, guias y metadatos (BE-03). "
+            "Crea el directorio si no existe. No modifica expedientes existentes salvo --force."
+        ),
+    )
+    init_p.add_argument(
+        "--force",
+        action="store_true",
+        help="Sobrescribir archivos guia estandar existentes (README, instrucciones, estado).",
+    )
+    init_p.add_argument(
+        "--no-guides",
+        action="store_true",
+        dest="no_guides",
+        help="Solo crear carpetas; no generar archivos guia ni metadata.",
+    )
 
     sub.add_parser(
         "status",
@@ -2315,6 +2357,13 @@ def main(argv=None) -> int:
     """Punto de entrada. Devuelve el código de salida (0=OK, 1=error/bloqueado)."""
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    # init-expediente: el directorio puede no existir todavia (BE-03)
+    if args.command == "init-expediente":
+        exp_path = Path(args.expediente).resolve()
+        with_guides = not getattr(args, "no_guides", False)
+        force = getattr(args, "force", False)
+        return cmd_init_expediente(exp_path, force=force, with_guides=with_guides)
 
     exp_path = Path(args.expediente).resolve()
     if not exp_path.exists():

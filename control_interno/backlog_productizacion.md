@@ -232,7 +232,7 @@
 |----|------|-----------|----------|--------------|-----------------|-------|
 | BE-01 | API REST: endpoints por fase (/fase1, /fase2, ...) con autenticación básica | P2 | L | NL-03 | ❌ No existe | Habilita separación frontend/backend |
 | BE-02 | Sistema de proyectos: crear, listar, abrir expedientes con ID único | P2 | M | NL-03 | ❌ No existe | |
-| BE-03 | Almacenamiento: estructura de carpetas por expediente en disco (compatible con el piloto) | P1 | S | — | ✅ Validada en piloto | Solo documentar y normalizar |
+| BE-03 | Almacenamiento: estructura de carpetas por expediente en disco (compatible con el piloto) | P1 | S | — | ✅ COMPLETADO 2026-05-29 | `expediente_initializer.py`, 94 tests, CLI `init-expediente`, suite 6600 OK |
 | BE-04 | Gestión de AEMET API key: configuración segura, no hardcoded | P1 | S | CL-01 | ⚠️ Key usada en piloto, no segura | |
 | BE-05 | Worker asíncrono para tareas largas (generación de mapas, llamadas WMS): evitar timeouts | P2 | L | BE-01, CA-02 | ❌ No existe | |
 | BE-06 | Logging estructurado: trazabilidad de cada llamada LLM + herramienta + tiempo de respuesta | P2 | M | NL-06 | ❌ No existe | |
