@@ -87,7 +87,7 @@ No se construye frontend hasta que el núcleo esté suficientemente maduro para 
 - ~~EN-01: Reescritura en python-docx~~ — **VALIDADO ✅** (Nave 222, 2026-04-19)
 - ~~EN-03: Inserción PNG sin bug de rutas~~ — **Resuelto ✅** (Nave 222, 2026-04-19)
 - ~~**CL-05**: Inserción climograma PNG en DOCX (resuelve problema SVG del piloto)~~ — **COMPLETADO ✅ 2026-04-26**
-- **EN-02**: Tabla de posicionamiento de bloques
+- ~~**EN-02**: Tabla de posicionamiento de bloques~~ — **COMPLETADO ✅ 2026-05-30** (100 tests OK, `src/eia_agent/core/document_structure_manager.py`, `DocumentSectionPosition`+`DocumentStructureResult`+`CANONICAL_DOCUMENT_ORDER` 15 posiciones, `detect_document_sections()`+`validate_document_structure()`+`normalize_document_structure()` conservadora (page_break_before sin reordenar)+`find_best_available_docx()`, 9 códigos EN02-E/W, CLI `document-structure [--write] [--normalize]`, sin IA/web/reordenación destructiva, suite 6805 OK, `docs/DOCUMENT_STRUCTURE_MANAGER.md`)
 - **EN-04**: Eliminar referencia huérfana numbering.xml
 - ~~EN-05: TOC automático~~ — **MOVIDO A P2** (no necesario para CONFORME)
 - ~~EN-06: Portada parametrizable~~ — **MOVIDO A P2**

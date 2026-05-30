@@ -15,7 +15,8 @@ Proporciona acceso desde consola a los módulos de productización:
   phase6-validate-pva, phase6-cumulative, audit-art45, audit-prudence,
   document-manifest, document-build-md, document-build-docx,
   document-insert-figures, document-qc, document-package, document-export,
-  document-prepare-presentation, audit-positive-gaps.
+  document-prepare-presentation, audit-positive-gaps,
+  document-structure.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -1770,6 +1771,46 @@ def cmd_secrets_scan(exp_path: Path, write: bool) -> int:
     return 0 if result.error_count() == 0 else 1
 
 
+def cmd_document_structure(
+    exp_path: Path, write: bool, normalize: bool
+) -> int:
+    """Valida y normaliza la estructura del DOCX final (EN-02)."""
+    from eia_agent.core.document_structure_manager import (
+        find_best_available_docx,
+        normalize_document_structure,
+        validate_document_structure,
+        write_document_structure_outputs,
+    )
+
+    docx_path = find_best_available_docx(exp_path)
+    if docx_path is None:
+        print("Error: no se encontro ningun DOCX en documento/", file=sys.stderr)
+        return 1
+
+    if normalize:
+        out_docx = exp_path / "documento" / "documento_ambiental_estructurado.docx"
+        result = normalize_document_structure(docx_path, out_docx)
+    else:
+        result = validate_document_structure(docx_path)
+
+    print(result.summary())
+
+    if result.errors:
+        print()
+        for err in result.errors[:10]:
+            print(f"  [ERROR] {err['code']}: {err['message']}")
+
+    if write:
+        out_dir = exp_path / "documento"
+        out_dir.mkdir(parents=True, exist_ok=True)
+        paths = write_document_structure_outputs(result, out_dir)
+        print(f"\nOutputs escritos:")
+        for p in paths:
+            print(f"  {p}")
+
+    return 0 if result.is_valid() else 1
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -2448,6 +2489,30 @@ Ejemplos:
         help="No crear documento_ambiental_final_revisable.docx.",
     )
 
+    en02_p = sub.add_parser(
+        "document-structure",
+        help=(
+            "Validar y normalizar la estructura del DOCX final (EN-02). "
+            "Sin flags: solo valida. --write: escribe JSON/MD. "
+            "--normalize: genera copia estructurada."
+        ),
+    )
+    en02_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir documento/document_structure_result.json y .md."
+        ),
+    )
+    en02_p.add_argument(
+        "--normalize",
+        action="store_true",
+        help=(
+            "Generar copia normalizada: documento/documento_ambiental_estructurado.docx. "
+            "No modifica el DOCX original."
+        ),
+    )
+
     return parser
 
 
@@ -2573,6 +2638,9 @@ def main(argv=None) -> int:
     if args.command == "document-prepare-presentation":
         create_final_docx = not getattr(args, "no_final_docx", False)
         return cmd_document_prepare_presentation(exp_path, args.write, create_final_docx)
+    if args.command == "document-structure":
+        normalize = getattr(args, "normalize", False)
+        return cmd_document_structure(exp_path, args.write, normalize)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()
