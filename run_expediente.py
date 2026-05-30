@@ -16,7 +16,7 @@ Proporciona acceso desde consola a los módulos de productización:
   document-manifest, document-build-md, document-build-docx,
   document-insert-figures, document-qc, document-package, document-export,
   document-prepare-presentation, audit-positive-gaps,
-  document-structure.
+  document-structure, document-numbering.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -1811,6 +1811,29 @@ def cmd_document_structure(
     return 0 if result.is_valid() else 1
 
 
+def cmd_document_numbering(exp_path: Path, write: bool, apply_styles: bool) -> int:
+    """Analiza y aplica estilos de numeracion al DOCX final (EN-04)."""
+    from eia_agent.core.document_numbering_manager import process_document_numbering
+
+    result = process_document_numbering(
+        exp_path,
+        write_outputs=write,
+        apply_styles=apply_styles,
+    )
+
+    print(result.summary())
+
+    if result.issues:
+        print()
+        for issue in result.issues[:10]:
+            print(f"  [{issue.severity}] {issue.code}: {issue.message}")
+
+    if write:
+        print(f"\nOutputs escritos en: {exp_path / 'documento'}")
+
+    return 0 if result.is_valid() else 1
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -2513,6 +2536,28 @@ Ejemplos:
         ),
     )
 
+    en04_p = sub.add_parser(
+        "document-numbering",
+        help=(
+            "Analizar y aplicar estilos de numeracion en el DOCX final (EN-04). "
+            "Sin flags: solo analiza. --write: escribe JSON/MD. "
+            "--apply: crea copia con estilos de lista aplicados."
+        ),
+    )
+    en04_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir documento/document_numbering_result.json y .md.",
+    )
+    en04_p.add_argument(
+        "--apply",
+        action="store_true",
+        help=(
+            "Crear documento/documento_ambiental_numerado.docx con estilos de "
+            "lista aplicados a parrafos candidatos. No modifica el DOCX original."
+        ),
+    )
+
     return parser
 
 
@@ -2641,6 +2686,9 @@ def main(argv=None) -> int:
     if args.command == "document-structure":
         normalize = getattr(args, "normalize", False)
         return cmd_document_structure(exp_path, args.write, normalize)
+    if args.command == "document-numbering":
+        apply_styles = getattr(args, "apply", False)
+        return cmd_document_numbering(exp_path, args.write, apply_styles)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()
