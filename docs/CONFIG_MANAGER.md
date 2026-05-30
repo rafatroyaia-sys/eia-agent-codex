@@ -97,7 +97,9 @@ python run_expediente.py <expediente> secrets-scan [--write]
 Escanea archivos del repositorio en busca de patrones de secretos:
 
 - Analiza: `.py`, `.md`, `.json`, `.yml`, `.yaml`, `.txt`, `.sh`, `.bat`, etc.
-- Excluye: `.git/`, `venv/`, `tmp/`, `__pycache__/`, `.pytest_cache/`, `expediente-EIA-*/`.
+- Excluye por defecto: `.git/`, `venv/`, `tmp/`, `__pycache__/`, `.pytest_cache/`, `expediente-EIA-*/`, **`.claude/`**.
+- **`.claude/` excluido** (BE-04.1): contiene configuración local del asistente CLI (`settings.local.json`)
+  que puede incluir tokens de sesión. Nunca debe commitearse (protegido por `.gitignore` vía `.claude/`).
 - **Nunca imprime valores completos** — solo fragmentos enmascarados.
 - **Con `--write`**: escribe informe en `control_interno/`.
 - **Exit 0** si no se detectan secretos.
@@ -119,8 +121,10 @@ Escanea archivos del repositorio en busca de patrones de secretos:
 
 1. **Añada `.env` a `.gitignore`** — ya está incluido por defecto.
 2. **No escriba claves en código Python** — use siempre `os.getenv()` o `.env`.
-3. **Revise `.claude/settings.local.json`** — puede contener API keys de sesiones
-   anteriores. Este archivo está excluido de git (`/.claude/` en `.gitignore`).
+3. **`.claude/settings.local.json` nunca debe commitearse** — puede contener tokens de
+   sesión del asistente CLI. Está excluido del escaneo de secretos por defecto (BE-04.1)
+   y excluido de git por `.gitignore` (regla `.claude/`). Si necesita escanearlo
+   explícitamente, llame a `scan_repo_for_potential_secrets(root, exclude_dirs=set())`.
 4. **Rote claves comprometidas** — si `secrets-scan` detecta un secreto en git
    history, cámbielo inmediatamente en el servicio correspondiente.
 5. **No comparta informes de config-check** — aunque los valores están enmascarados,

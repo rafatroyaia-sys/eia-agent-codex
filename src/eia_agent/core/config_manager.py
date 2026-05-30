@@ -65,11 +65,14 @@ PLACEHOLDER_VALUES: set = {
 # Backward-compatible: incluye local/ci del .env.example existente
 ALLOWED_EIA_ENV: set = {"local", "dev", "ci", "test", "prod"}
 
-# Dirs excluidos por defecto en escaneo de repo
+# Dirs excluidos por defecto en escaneo de repo.
+# .claude/ excluido para evitar falsos positivos con configuración local del CLI
+# (settings.local.json contiene tokens de sesión, ya protegido por .gitignore).
 _DEFAULT_EXCLUDE_DIRS: set = {
     ".git", "venv", "env", ".venv", "tmp", "temp",
     "__pycache__", ".pytest_cache", ".tox", "node_modules",
     "dist", "build", ".mypy_cache", ".ruff_cache",
+    ".claude",
 }
 
 # Extensiones de texto a escanear

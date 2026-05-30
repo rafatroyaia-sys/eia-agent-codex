@@ -597,6 +597,81 @@ class TestScanRepoForPotentialSecrets(unittest.TestCase):
 
 
 # ---------------------------------------------------------------------------
+# TestExcludeDotClaude — BE-04.1
+# ---------------------------------------------------------------------------
+
+class TestExcludeDotClaude(unittest.TestCase):
+    """BE-04.1: .claude/ excluido por defecto del escaneo de secretos."""
+
+    def _make_repo(self, tmpdir: str):
+        root = Path(tmpdir)
+        claude_dir = root / ".claude"
+        claude_dir.mkdir()
+        (claude_dir / "settings.local.json").write_text(
+            '{"token": "eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9'
+            '.eyJzdWIiOiJ1c2VyXzEyMyJ9.sk-testFAKEjwt12345678901234"}',
+            encoding="utf-8",
+        )
+        src_dir = root / "src"
+        src_dir.mkdir()
+        (src_dir / "archivo_seguro.py").write_text(
+            "# modulo limpio\ndef hello():\n    return 'ok'\n",
+            encoding="utf-8",
+        )
+        (root / "archivo_con_secreto.txt").write_text(
+            "OPENAI_API_KEY=sk-test1234567890abcdefghijklmnopqrstuvwxyz\n",
+            encoding="utf-8",
+        )
+        return root
+
+    def test_excluye_dot_claude_por_defecto(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = self._make_repo(tmpdir)
+            result = scan_repo_for_potential_secrets(root)
+            all_messages = " ".join(i.message for i in result.issues)
+            self.assertNotIn("settings.local.json", all_messages)
+
+    def test_detecta_secreto_fuera_de_dot_claude(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = self._make_repo(tmpdir)
+            result = scan_repo_for_potential_secrets(root)
+            all_messages = " ".join(i.message for i in result.issues)
+            self.assertIn("archivo_con_secreto.txt", all_messages)
+
+    def test_no_reporta_secreto_en_dot_claude(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = self._make_repo(tmpdir)
+            result = scan_repo_for_potential_secrets(root)
+            for issue in result.issues:
+                self.assertNotIn(".claude", issue.message)
+
+    def test_no_muestra_valor_completo_del_secreto(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = self._make_repo(tmpdir)
+            result = scan_repo_for_potential_secrets(root)
+            sk_full = "sk-test1234567890abcdefghijklmnopqrstuvwxyz"
+            for issue in result.issues:
+                self.assertNotIn(sk_full, issue.message)
+                self.assertNotIn(sk_full, str(issue.evidence))
+
+    def test_sigue_excluyendo_tmp_venv_git(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            for excl in ("tmp", "venv", ".git"):
+                d = root / excl
+                d.mkdir()
+                (d / "secreto.py").write_text(
+                    "sk-abcdefghijklmnopqrstuvwxyz1234\n", encoding="utf-8"
+                )
+            result = scan_repo_for_potential_secrets(root)
+            self.assertEqual(result.status, "OK")
+
+    def test_dot_claude_en_constante_default_exclude_dirs(self):
+        from eia_agent.core.config_manager import _DEFAULT_EXCLUDE_DIRS
+        self.assertIn(".claude", _DEFAULT_EXCLUDE_DIRS)
+
+
+# ---------------------------------------------------------------------------
 # TestCLIConfigCheck
 # ---------------------------------------------------------------------------
 

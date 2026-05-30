@@ -297,3 +297,11 @@ Errors: 0
 **Bugs en BE-04**: 0.  
 **Claves reales expuestas**: 0.  
 **Archivos temporales en staging**: 0.
+
+---
+
+## Nota posterior — BE-04.1 (2026-05-30)
+
+La incidencia informativa sobre `.claude/` queda resuelta en **BE-04.1** mediante exclusión por defecto del `secrets-scan`.
+
+`.claude` se ha añadido a `_DEFAULT_EXCLUDE_DIRS` en `config_manager.py`. La detección de JWT-like en `.claude/settings.local.json` (configuración interna del CLI) deja de aparecer en el escaneo estándar. El archivo sigue protegido por `.gitignore` (regla `.claude/`). Se añadieron 6 tests específicos en `TestExcludeDotClaude`. Suite: 6705 OK (12 skipped).
