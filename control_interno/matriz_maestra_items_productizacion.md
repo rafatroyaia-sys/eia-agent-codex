@@ -163,6 +163,7 @@ Ordenada por grupo de implementación (ver §Orden recomendado). Incluye todos l
 | **EN-03** | PNG sin bug rutas | Inserción de imágenes PNG con `Path()` en lugar de string concatenation. | ensamblador | EN-01 | ✅ Ya resuelto | **✅ DONE** — validado NAVE-222 |
 | **EN-02** | Tabla posicionamiento bloques | `document_structure_manager.py`: validación y normalización conservadora de la estructura física del DOCX final. `CANONICAL_DOCUMENT_ORDER` (15 posiciones PORTADA→FIRMAS). `detect_document_sections()`, `validate_document_structure()`, `normalize_document_structure()` (page_break_before, sin reordenar). `find_best_available_docx()`. 9 códigos EN02-E/W. CLI `document-structure [--write] [--normalize]`. 100 tests OK. Suite 6805 OK. | ensamblador | EN-01 | 100 tests OK. CLI `document-structure [--write] [--normalize]`. Suite 6805 OK. | ✅ **COMPLETADO 2026-05-30** — `src/eia_agent/core/document_structure_manager.py`. `docs/DOCUMENT_STRUCTURE_MANAGER.md`. |
 | **EN-04** | Numeracion DOCX | `document_numbering_manager.py`: deteccion de numbering.xml, candidatos a lista (numerada/viñetas), aplicacion de estilos List Number/Bullet en copia conservadora. Resuelve OBS-004 via generacion controlada. 4 codigos EN04-E/W. CLI `document-numbering [--write] [--apply]`. 127 tests OK. Suite 6932 OK. | ensamblador | EN-01 | 127 tests OK. CLI `document-numbering [--write] [--apply]`. Suite 6932 OK. | ✅ **COMPLETADO 2026-05-30** — `src/eia_agent/core/document_numbering_manager.py`. `docs/DOCUMENT_NUMBERING_MANAGER.md`. |
+| **EN-05** | TOC automatico DOCX | `document_toc_manager.py`: deteccion de campo TOC via zipfile, insercion/reemplazo campo TOC (OxmlElement), updateFields en settings.xml, busqueda de placeholders. 2 codigos EN05-E. CLI `document-toc [--write] [--apply] [--no-replace]`. 142 tests OK. Suite 7074 OK. | ensamblador | EN-01 | 142 tests OK. CLI `document-toc [--write] [--apply] [--no-replace]`. Suite 7074 OK. | ✅ **COMPLETADO 2026-05-30** — `src/eia_agent/core/document_toc_manager.py`. `docs/DOCUMENT_TOC_MANAGER.md`. |
 | **CL-05** | (Ver Grupo 6) | Inserción climograma PNG en DOCX | ensamblador | CL-04, EN-01 | Ver Grupo 6 | ❌ No resuelto |
 
 ### GRUPO 10 — Auditoría programática (semana 8-9)
@@ -206,7 +207,7 @@ No se detallan a nivel de DONE/estado — están en backlog.md. Solo se listan p
 | Cartografía | CA-07 (semáforo campo cartografía) | CA-03 |
 | Impactos | IM-10+ (PVA genérico Compatible — ID libre post-IM-09) | IM-09 |
 | Redacción | RD-03 (plantillas tipológicas) | RD-01 ✅ |
-| Ensamblador | EN-05 (TOC), EN-06 (portada), EN-07 (estilos admin), EN-08 (CI/CD) | EN-01 ✅ |
+| Ensamblador | EN-06 (portada), EN-07 (estilos admin), EN-08 (CI/CD) | EN-01 ✅, EN-05 ✅ |
 | Auditoría | AU-05 (coherencia inter-bloques) | AU-01 |
 | Backend | BE-01 (API REST), BE-02 (proyectos), BE-05 (worker), BE-06 (logging) | NL-03 |
 

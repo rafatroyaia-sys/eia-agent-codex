@@ -16,7 +16,7 @@ Proporciona acceso desde consola a los módulos de productización:
   document-manifest, document-build-md, document-build-docx,
   document-insert-figures, document-qc, document-package, document-export,
   document-prepare-presentation, audit-positive-gaps,
-  document-structure, document-numbering.
+  document-structure, document-numbering, document-toc.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -46,6 +46,7 @@ Uso:
     python run_expediente.py <expediente> document-export [--write] [--no-pdf] [--overwrite]
     python run_expediente.py <expediente> document-prepare-presentation [--write] [--no-final-docx]
     python run_expediente.py <expediente> audit-positive-gaps [--write]
+    python run_expediente.py <expediente> document-toc [--write] [--apply] [--no-replace]
 """
 import argparse
 import sys
@@ -1811,6 +1812,32 @@ def cmd_document_structure(
     return 0 if result.is_valid() else 1
 
 
+def cmd_document_toc(
+    exp_path: Path, write: bool, apply_toc: bool, replace_placeholder: bool
+) -> int:
+    """Gestiona el indice automatico (TOC) en el DOCX final (EN-05)."""
+    from eia_agent.core.document_toc_manager import process_document_toc
+
+    result = process_document_toc(
+        exp_path,
+        write_outputs=write,
+        apply_toc=apply_toc,
+        replace_placeholder=replace_placeholder,
+    )
+
+    print(result.summary())
+
+    if result.issues:
+        print()
+        for issue in result.issues[:10]:
+            print(f"  [{issue.severity}] {issue.code}: {issue.message}")
+
+    if write:
+        print(f"\nOutputs escritos en: {exp_path / 'documento'}")
+
+    return 0 if result.is_valid() else 1
+
+
 def cmd_document_numbering(exp_path: Path, write: bool, apply_styles: bool) -> int:
     """Analiza y aplica estilos de numeracion al DOCX final (EN-04)."""
     from eia_agent.core.document_numbering_manager import process_document_numbering
@@ -2558,6 +2585,37 @@ Ejemplos:
         ),
     )
 
+    en05_p = sub.add_parser(
+        "document-toc",
+        help=(
+            "Gestionar el indice automatico (TOC) en el DOCX final (EN-05). "
+            "Sin flags: solo analiza. --write: escribe JSON/MD. "
+            "--apply: crea copia con campo TOC insertado."
+        ),
+    )
+    en05_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir documento/document_toc_result.json y .md.",
+    )
+    en05_p.add_argument(
+        "--apply",
+        action="store_true",
+        help=(
+            "Crear documento/documento_ambiental_con_toc.docx con campo TOC insertado. "
+            "No modifica el DOCX original."
+        ),
+    )
+    en05_p.add_argument(
+        "--no-replace",
+        action="store_true",
+        dest="no_replace",
+        help=(
+            "No reemplazar placeholder de TOC aunque exista; "
+            "insertar el TOC al inicio del documento."
+        ),
+    )
+
     return parser
 
 
@@ -2689,6 +2747,10 @@ def main(argv=None) -> int:
     if args.command == "document-numbering":
         apply_styles = getattr(args, "apply", False)
         return cmd_document_numbering(exp_path, args.write, apply_styles)
+    if args.command == "document-toc":
+        apply_toc = getattr(args, "apply", False)
+        replace_placeholder = not getattr(args, "no_replace", False)
+        return cmd_document_toc(exp_path, args.write, apply_toc, replace_placeholder)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()

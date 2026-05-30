@@ -227,7 +227,7 @@ No se construye frontend hasta que el núcleo esté suficientemente maduro para 
 - IV-04: Validador de regla de prudencia en fichas de inventario
 
 #### Mejoras de ensamblador
-- EN-05: TOC automático
+- ~~**EN-05**: TOC automatico~~ — **COMPLETADO ✅ 2026-05-30** (`document_toc_manager.py`, 142 tests, `document-toc [--write] [--apply] [--no-replace]`, `docs/DOCUMENT_TOC_MANAGER.md`, suite 7074 OK)
 - EN-06: Portada parametrizable con logo
 - EN-07: Estilos Word conformes a guías de la administración
 - EN-08: Pipeline CI/CD para el ensamblador
