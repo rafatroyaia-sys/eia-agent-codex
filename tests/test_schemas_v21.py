@@ -31,6 +31,8 @@ PROJECT = Path(__file__).parent.parent.resolve()
 SCHEMAS_DIR = PROJECT / "config" / "schemas" / "v2_1"
 PILOTO_PARCELA = PROJECT / "expediente-EIA-2026-RECIMETAL-PARCELA" / "capas"
 PILOTO_NAVE222 = PROJECT / "expediente-EIA-2026-RECIMETAL-NAVE-222" / "capas"
+_PARCELA_OK = PILOTO_PARCELA.exists()
+_NAVE222_OK = PILOTO_NAVE222.exists()
 
 SCHEMA_FILES = [
     "common_defs.schema.json",
@@ -161,7 +163,7 @@ class TestSchemasCheckSchema(unittest.TestCase):
 # 4. Validacion contra pilotos
 # ---------------------------------------------------------------------------
 
-@unittest.skipUnless(_JSONSCHEMA_OK, "jsonschema no instalado")
+@unittest.skipUnless(_JSONSCHEMA_OK and _PARCELA_OK, "jsonschema no instalado o piloto PARCELA no disponible")
 class TestValidacionPilotoParcela(unittest.TestCase):
 
     def _validar_capa(self, capa_file, schema_file):
@@ -193,7 +195,7 @@ class TestValidacionPilotoParcela(unittest.TestCase):
         self._validar_capa("salidas_generadas.json", "salidas_generadas.schema.json")
 
 
-@unittest.skipUnless(_JSONSCHEMA_OK, "jsonschema no instalado")
+@unittest.skipUnless(_JSONSCHEMA_OK and _NAVE222_OK, "jsonschema no instalado o piloto NAVE-222 no disponible")
 class TestValidacionPilotoNave222(unittest.TestCase):
 
     def _validar_capa(self, capa_file, schema_file):

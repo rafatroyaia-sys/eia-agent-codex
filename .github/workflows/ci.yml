@@ -58,17 +58,7 @@ jobs:
       # ── 6. Tests ─────────────────────────────────────────────────────────────
       - name: Ejecutar suite de tests (offline, sin APIs ni secretos)
         shell: pwsh
-        run: |
-          $output = python -m unittest discover -s tests 2>&1
-          $exit_code = $LASTEXITCODE
-          $output | ForEach-Object { Write-Host $_ }
-          if ($exit_code -ne 0) {
-            $fail_lines = $output | Where-Object { $_ -match "FAIL|ERROR|Traceback|Error:" } | Select-Object -Last 20
-            $fail_lines | ForEach-Object { Write-Host "::error::$_" }
-            $summary = $output | Select-Object -Last 5
-            $summary | ForEach-Object { Write-Host "::error::$_" }
-          }
-          exit $exit_code
+        run: python -m unittest discover -s tests
 
       # ── 7. Archivos prohibidos ───────────────────────────────────────────────
       - name: Comprobar que no se trackean archivos prohibidos

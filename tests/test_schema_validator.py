@@ -26,6 +26,8 @@ PROJECT = Path(__file__).parent.parent.resolve()
 SCHEMA_DIR = PROJECT / "config" / "schemas" / "v2_1"
 PILOTO_PARCELA = PROJECT / "expediente-EIA-2026-RECIMETAL-PARCELA"
 PILOTO_NAVE222 = PROJECT / "expediente-EIA-2026-RECIMETAL-NAVE-222"
+_PARCELA_OK = PILOTO_PARCELA.exists()
+_NAVE222_OK = PILOTO_NAVE222.exists()
 
 
 # ---------------------------------------------------------------------------
@@ -166,6 +168,7 @@ class TestLoadSchemaIndex(unittest.TestCase):
 
 class TestValidateLayer(unittest.TestCase):
 
+    @unittest.skipUnless(_PARCELA_OK, "Piloto PARCELA no disponible")
     def test_capa_valida_parcela(self):
         issues = validate_layer(
             expediente_path=PILOTO_PARCELA,
@@ -176,6 +179,7 @@ class TestValidateLayer(unittest.TestCase):
         )
         self.assertEqual(issues, [])
 
+    @unittest.skipUnless(_NAVE222_OK, "Piloto NAVE-222 no disponible")
     def test_capa_valida_nave222(self):
         issues = validate_layer(
             expediente_path=PILOTO_NAVE222,
@@ -293,8 +297,10 @@ class TestValidateLayer(unittest.TestCase):
 # validate_expediente — pilotos reales
 # ---------------------------------------------------------------------------
 
+@unittest.skipUnless(_PARCELA_OK or _NAVE222_OK, "Pilotos PARCELA y NAVE-222 no disponibles")
 class TestValidateExpedientePilotos(unittest.TestCase):
 
+    @unittest.skipUnless(_PARCELA_OK, "Piloto PARCELA no disponible")
     def test_parcela_es_valido(self):
         result = validate_expediente(PILOTO_PARCELA, schema_dir=SCHEMA_DIR)
         self.assertTrue(
@@ -302,6 +308,7 @@ class TestValidateExpedientePilotos(unittest.TestCase):
             f"Piloto PARCELA no valido:\n{result.summary()}",
         )
 
+    @unittest.skipUnless(_NAVE222_OK, "Piloto NAVE-222 no disponible")
     def test_nave222_es_valido(self):
         result = validate_expediente(PILOTO_NAVE222, schema_dir=SCHEMA_DIR)
         self.assertTrue(
@@ -309,18 +316,22 @@ class TestValidateExpedientePilotos(unittest.TestCase):
             f"Piloto NAVE-222 no valido:\n{result.summary()}",
         )
 
+    @unittest.skipUnless(_PARCELA_OK, "Piloto PARCELA no disponible")
     def test_parcela_zero_errores(self):
         result = validate_expediente(PILOTO_PARCELA, schema_dir=SCHEMA_DIR)
         self.assertEqual(result.error_count(), 0)
 
+    @unittest.skipUnless(_NAVE222_OK, "Piloto NAVE-222 no disponible")
     def test_nave222_zero_errores(self):
         result = validate_expediente(PILOTO_NAVE222, schema_dir=SCHEMA_DIR)
         self.assertEqual(result.error_count(), 0)
 
+    @unittest.skipUnless(_PARCELA_OK, "Piloto PARCELA no disponible")
     def test_schema_version_es_21(self):
         result = validate_expediente(PILOTO_PARCELA, schema_dir=SCHEMA_DIR)
         self.assertEqual(result.schema_version, "2.1")
 
+    @unittest.skipUnless(_PARCELA_OK, "Piloto PARCELA no disponible")
     def test_expediente_path_en_resultado(self):
         result = validate_expediente(PILOTO_PARCELA, schema_dir=SCHEMA_DIR)
         self.assertEqual(result.expediente_path, PILOTO_PARCELA.resolve())
