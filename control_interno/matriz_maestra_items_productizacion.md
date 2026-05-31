@@ -268,8 +268,9 @@ Ver sección §4 del informe de normalización adjunto (`cierre_normalizacion_ba
 | DOC-09 | Incorporacion IM-09 en documento final, QC, paquete y checklist | ✅ **COMPLETADO** | 2026-05-29 | C.5+I.3 en MD builder, QC-E009/W009/W010, AUDIT_FILES+conditional_chain, CHK-013 (13 items), +37 tests, suite 6376 OK |
 | QA-11 | Prueba real pipeline completo con RD-07 integrado | ✅ **COMPLETADO** | 2026-05-29 | 19/19 pasos OK, AUDIT_POSITIVE_GAPS pos. 10 SUCCESS, positive_gap_result.json 0 positivos/0 con gap ALTA, positive_gap_summary en final_audit_result.json, sección 9 RD-07 en final_audit_result.md (15 secciones), 0 bugs, suite 6506 OK |
 | RELEASE-01 | Prueba completa producto v1.0: expediente limpio → paquete final | ✅ **COMPLETADO** | 2026-05-31 | 15 comandos ejecutados, pipeline 19/19 OK, 19/19 outputs documentales generados, document-qc VÁLIDO 11/11 bloques 6 figuras, ZIP 3.2 MB 23 archivos, DOCX TOC 349 párrafos, administrative_ready=False, IM-09+RD-07 presentes, 0 bugs de código, suite final 7074 OK |
+| CI-01 | GitHub Actions: workflow validación automática push/PR master | ✅ **COMPLETADO** | 2026-05-31 | `.github/workflows/ci.yml`, 9 pasos, windows-latest, Python 3.11, unittest 7074 OK, archivos prohibidos, secrets-scan informativo, docs/CI_GITHUB_ACTIONS.md, README actualizado |
 
 ---
 
 *Matriz maestra creada 2026-04-19 — normalización pre-P1 código*  
-*Actualizada 2026-05-31 — RELEASE-01 completado: prueba completa de producto v1.0 desde expediente limpio hasta ZIP exportable (15 comandos, 0 bugs)*
+*Actualizada 2026-05-31 — CI-01 completado: GitHub Actions workflow de validación automática (9 pasos, windows-latest, suite 7074 OK)*

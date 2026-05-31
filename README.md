@@ -106,6 +106,21 @@ Ver:
 
 ---
 
+## Validación automática
+
+El proyecto usa **GitHub Actions** para validación automática en cada push y pull request.
+
+El workflow CI ejecuta:
+- instalación de dependencias desde `requirements.txt`
+- verificación de imports del paquete `eia_agent`
+- suite completa de tests unitarios (offline, sin APIs externas ni claves reales)
+- comprobación de que no se versionan archivos prohibidos
+- escaneo informativo de secretos
+
+Ver `.github/workflows/ci.yml` y `docs/CI_GITHUB_ACTIONS.md` para más detalle.
+
+---
+
 ## Normativa mínima por expediente
 
 - **Ley 21/2013**: arts. 7, 16, 45, 46, 47, Anexos II, III

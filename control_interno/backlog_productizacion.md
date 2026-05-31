@@ -240,6 +240,7 @@
 | BE-04.1 | Excluir .claude/ del escaneo de secretos por defecto | P1 | S | QA-BE04 | ✅ COMPLETADO 2026-05-30 | `.claude` añadido a `_DEFAULT_EXCLUDE_DIRS`, 6 tests nuevos `TestExcludeDotClaude`, suite 6705 OK |
 | BE-05 | Worker asíncrono para tareas largas (generación de mapas, llamadas WMS): evitar timeouts | P2 | L | BE-01, CA-02 | ❌ No existe | |
 | BE-06 | Logging estructurado: trazabilidad de cada llamada LLM + herramienta + tiempo de respuesta | P2 | M | NL-06 | ❌ No existe | |
+| CI-01 | GitHub Actions: workflow de validación automática en push/PR a master | P1 | S | RELEASE-01 | ✅ **COMPLETADO 2026-05-31** — `.github/workflows/ci.yml`: checkout + Python 3.11 + pip + requirements + imports + unittest + archivos prohibidos + secrets-scan informativo. windows-latest. workflow_dispatch habilitado. Suite local 7074 OK. `docs/CI_GITHUB_ACTIONS.md`. | secrets-scan con continue-on-error=true (falsos positivos conocidos). CI-02 añadirá strict scan + matrix Linux/Windows. |
 
 ---
 

@@ -1,0 +1,101 @@
+name: CI — Validación automática EIA-Agent v2.1
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  validate:
+    name: Validar proyecto EIA-Agent
+    runs-on: windows-latest
+
+    steps:
+      # ── 1. Checkout ─────────────────────────────────────────────────────────
+      - name: Checkout del repositorio
+        uses: actions/checkout@v4
+
+      # ── 2. Python ───────────────────────────────────────────────────────────
+      - name: Configurar Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # ── 3. Dependencias ─────────────────────────────────────────────────────
+      - name: Actualizar pip
+        shell: pwsh
+        run: python -m pip install --upgrade pip
+
+      - name: Instalar dependencias (requirements.txt)
+        shell: pwsh
+        run: pip install -r requirements.txt
+
+      # ── 4. Entorno ──────────────────────────────────────────────────────────
+      - name: Mostrar versión Python y dependencias clave
+        shell: pwsh
+        run: |
+          python --version
+          pip --version
+          Write-Host "--- Dependencias instaladas ---"
+          pip show python-docx jsonschema requests python-dotenv matplotlib jinja2 Pillow pdfplumber lxml 2>&1 | Select-String "^Name:|^Version:" | Select-Object -First 20
+
+      # ── 5. Imports ──────────────────────────────────────────────────────────
+      - name: Verificar imports del proyecto
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = "src"
+          python -c "import eia_agent; print('eia_agent', eia_agent.__version__)"
+          python -c "from eia_agent.core import technical_pipeline; print('technical_pipeline OK')"
+          python -c "from eia_agent.core import document_manifest; print('document_manifest OK')"
+          python -c "from eia_agent.core import final_audit_report; print('final_audit_report OK')"
+          python -c "from eia_agent.core import document_markdown_builder; print('document_markdown_builder OK')"
+
+      # ── 6. Tests ─────────────────────────────────────────────────────────────
+      - name: Ejecutar suite de tests (offline, sin APIs ni secretos)
+        shell: pwsh
+        run: python -m unittest discover -s tests
+
+      # ── 7. Archivos prohibidos ───────────────────────────────────────────────
+      - name: Comprobar que no se trackean archivos prohibidos
+        shell: pwsh
+        run: |
+          $files = git ls-files
+          $total = $files.Count
+          $prohibited = $files | Where-Object {
+            $_ -match '(^|/)\.env$'              -or  # .env real (no .env.example)
+            $_ -match 'settings\.local\.json'    -or  # config local Claude
+            $_ -match '^tmp/'                    -or  # temporales
+            $_ -match '^venv/'                   -or  # entorno virtual
+            $_ -match 'expediente-EIA-'          -or  # expedientes piloto
+            $_ -match '\.docx$'                  -or  # documentos generados
+            $_ -match '\.pdf$'                   -or  # PDFs
+            $_ -match '\.png$'                   -or  # imágenes reales
+            $_ -match '\.jpg$'                   -or  # imágenes reales
+            $_ -match '\.jpeg$'                  -or  # imágenes reales
+            $_ -match '\.zip$'                   -or  # paquetes exportados
+            $_ -match '__pycache__'              -or  # compilados Python
+            $_ -match '\.pytest_cache'               # caché pytest
+          }
+          if ($prohibited) {
+            Write-Host "ERROR: Archivos prohibidos encontrados en el repositorio tracked:"
+            $prohibited | ForEach-Object { Write-Host "  PROHIBIDO: $_" }
+            Write-Host ""
+            Write-Host "Accion requerida: añadir a .gitignore y ejecutar git rm --cached."
+            exit 1
+          }
+          Write-Host "OK: $total archivos revisados — sin archivos prohibidos tracked."
+          Write-Host "Nota: .env.example esta permitido (sin claves reales)."
+
+      # ── 8. Secrets-scan informativo ──────────────────────────────────────────
+      - name: Escaneo de secretos — informativo (CI-01)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Write-Host "=== Escaneo de secretos (modo informativo en CI-01) ==="
+          Write-Host "Nota: falsos positivos esperados en tests/docs (documentados en QA-BE04)."
+          Write-Host "      Exit 1 de este paso NO falla el workflow en CI-01."
+          Write-Host "      Para modo estricto: ver CI-02."
+          Write-Host ""
+          python run_expediente.py . secrets-scan --write
