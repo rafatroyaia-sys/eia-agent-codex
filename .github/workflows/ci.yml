@@ -7,6 +7,9 @@ on:
     branches: [master]
   workflow_dispatch:
 
+env:
+  PYTHONUTF8: "1"
+
 jobs:
   validate:
     name: Validar proyecto EIA-Agent
@@ -18,10 +21,10 @@ jobs:
         uses: actions/checkout@v4
 
       # ── 2. Python ───────────────────────────────────────────────────────────
-      - name: Configurar Python 3.11
+      - name: Configurar Python 3.13
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
 
       # ── 3. Dependencias ─────────────────────────────────────────────────────
       - name: Actualizar pip
@@ -71,21 +74,21 @@ jobs:
             $_ -match 'expediente-EIA-'          -or  # expedientes piloto
             $_ -match '\.docx$'                  -or  # documentos generados
             $_ -match '\.pdf$'                   -or  # PDFs
-            $_ -match '\.png$'                   -or  # imágenes reales
-            $_ -match '\.jpg$'                   -or  # imágenes reales
-            $_ -match '\.jpeg$'                  -or  # imágenes reales
+            $_ -match '\.png$'                   -or  # imagenes reales
+            $_ -match '\.jpg$'                   -or  # imagenes reales
+            $_ -match '\.jpeg$'                  -or  # imagenes reales
             $_ -match '\.zip$'                   -or  # paquetes exportados
             $_ -match '__pycache__'              -or  # compilados Python
-            $_ -match '\.pytest_cache'               # caché pytest
+            $_ -match '\.pytest_cache'               # cache pytest
           }
           if ($prohibited) {
             Write-Host "ERROR: Archivos prohibidos encontrados en el repositorio tracked:"
             $prohibited | ForEach-Object { Write-Host "  PROHIBIDO: $_" }
             Write-Host ""
-            Write-Host "Accion requerida: añadir a .gitignore y ejecutar git rm --cached."
+            Write-Host "Accion requerida: anadir a .gitignore y ejecutar git rm --cached."
             exit 1
           }
-          Write-Host "OK: $total archivos revisados — sin archivos prohibidos tracked."
+          Write-Host "OK: $total archivos revisados - sin archivos prohibidos tracked."
           Write-Host "Nota: .env.example esta permitido (sin claves reales)."
 
       # ── 8. Secrets-scan informativo ──────────────────────────────────────────
