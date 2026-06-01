@@ -546,13 +546,39 @@ def build_inventory_from_phase4(
     """
     exp_path = Path(expediente_path).resolve()
 
-    # phase4_result.json — obligatorio
+    # phase4_result.json — obligatorio salvo compatibilidad legacy AG-08
     p4_path = (
         Path(phase4_result_path)
         if phase4_result_path is not None
         else exp_path / "fase4" / "phase4_result.json"
     )
-    phase4_result = load_json_file(p4_path)
+    try:
+        phase4_result = load_json_file(p4_path)
+    except FileNotFoundError:
+        legacy_index = exp_path / "fichas_inventario" / "indice_inventario.json"
+        if not legacy_index.exists():
+            raise
+        from eia_agent.core.inventory_legacy_adapter import adapt_legacy_inventory_index
+        legacy_result = adapt_legacy_inventory_index(
+            exp_path,
+            legacy_index_path=legacy_index,
+            write_outputs=write_outputs,
+        )
+        notes = list(legacy_result.notes)
+        notes.append(
+            "Compatibilidad legacy activada: phase4_result.json no existe; "
+            "inventario reconstruido desde fichas_inventario/indice_inventario.json."
+        )
+        rendered_files = [legacy_result.output_path] if legacy_result.output_path else []
+        return InventoryBuildResult(
+            expediente_id=legacy_result.expediente_id,
+            inventory_summary=legacy_result.inventory_summary,
+            factor_count=legacy_result.inventory_summary.total_factors,
+            ready_count=legacy_result.inventory_summary.ready_count,
+            rendered_files=[p for p in rendered_files if p],
+            warnings=list(legacy_result.warnings),
+            notes=notes,
+        )
     expediente_id = phase4_result.get("expediente_id", exp_path.name)
 
     warnings: list[str] = []

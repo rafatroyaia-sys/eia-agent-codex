@@ -121,6 +121,18 @@ Ver `.github/workflows/ci.yml` y `docs/CI_GITHUB_ACTIONS.md` para más detalle.
 
 ---
 
+## Compatibilidad con expedientes piloto
+
+Los expedientes avanzados que ya tienen fichas AG-08 en
+`fichas_inventario/indice_inventario.json` pueden reconstruir el
+`inventario/inventory_summary.json` productizado mediante el adaptador legacy.
+El sistema conserva gaps, cautelas y estados de evidencia; no eleva datos ni
+declara aptitud administrativa.
+
+Ver `docs/INVENTORY_LEGACY_ADAPTER.md`.
+
+---
+
 ## Normativa mínima por expediente
 
 - **Ley 21/2013**: arts. 7, 16, 45, 46, 47, Anexos II, III

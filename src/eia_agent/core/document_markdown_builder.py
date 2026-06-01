@@ -2057,15 +2057,94 @@ def _build_block_from_existing_markdown(
     md = safe_read_text(exp_path / rel)
     if md is None or not md.strip():
         return None
+    warnings: list[str] = []
+    md = _augment_existing_block_markdown(exp_path, block_id, md.strip(), warnings)
     return DocumentBlockBuildResult(
         block_id=block_id,
         title=title,
         status="GENERATED",
         source_files=[rel],
-        markdown=md.strip(),
+        markdown=md,
+        warnings=warnings,
         notes=[
             "Bloque preexistente en bloques/ usado como fuente documental.",
         ],
+    )
+
+
+def _augment_existing_block_markdown(
+    exp_path: Path,
+    block_id: str,
+    markdown: str,
+    warnings: list[str],
+) -> str:
+    """Anade avisos de auditoria a bloques legacy sin reescribir su contenido."""
+    if block_id not in {"I", "J"}:
+        return markdown
+
+    markdown = _augment_existing_block_with_im09(exp_path, block_id, markdown, warnings)
+
+    audit = safe_load_json(exp_path / "auditoria" / "final_audit_result.json")
+    if not isinstance(audit, dict):
+        return markdown
+
+    audit_status = _str(_get(audit, "status"), "")
+    if not audit_status or audit_status in markdown:
+        return markdown
+
+    if audit_status == "NO_CONFORME":
+        warnings.append(
+            "Bloque legacy aumentado con aviso visible de auditoria NO_CONFORME."
+        )
+        return (
+            f"{markdown}\n\n"
+            "### Aviso de auditoria interna\n\n"
+            "> **AVISO DE AUDITORIA FINAL:** El informe final de auditoria "
+            "interna califica el expediente como NO CONFORME "
+            "(estado interno: `NO_CONFORME`). Las incidencias detectadas deben "
+            "resolverse antes de iniciar cualquier tramite administrativo.\n"
+        )
+
+    if audit_status in {"CONFORME_CON_OBSERVACIONES", "CON_OBSERVACIONES", "INCOMPLETO"}:
+        warnings.append(
+            f"Bloque legacy aumentado con aviso visible de auditoria {audit_status}."
+        )
+        return (
+            f"{markdown}\n\n"
+            "### Aviso de auditoria interna\n\n"
+            f"> **Estado auditoria (AU-04):** `{audit_status}`. "
+            "Este estado es interno y no declara aptitud administrativa.\n"
+        )
+
+    return markdown
+
+
+def _augment_existing_block_with_im09(
+    exp_path: Path,
+    block_id: str,
+    markdown: str,
+    warnings: list[str],
+) -> str:
+    """Hace visible el estado IM-09 en bloques legacy cuando existe."""
+    if block_id != "I" or "IM-09" in markdown:
+        return markdown
+
+    cc = safe_load_json(exp_path / "auditoria" / "conditional_chain_result.json")
+    if not isinstance(cc, dict):
+        return markdown
+
+    cc_status = _str(_get(cc, "status"), "")
+    if not cc_status:
+        return markdown
+
+    warnings.append(
+        f"Bloque legacy aumentado con estado IM-09 {cc_status}."
+    )
+    return (
+        f"{markdown}\n\n"
+        "### Auditoria de cadenas condicionales IM-09\n\n"
+        f"> **Estado IM-09:** `{cc_status}`. Este control revisa la coherencia "
+        "entre impactos, medidas y PVA; no declara aptitud administrativa.\n"
     )
 
 

@@ -962,6 +962,50 @@ class TestBuildDocumentMarkdown(unittest.TestCase):
         self.assertEqual(block_a.source_files, ["bloques/A_identificacion_y_descripcion.md"])
         self.assertIn("Contenido AG-10 existente", block_a.markdown)
 
+    def test_existing_block_i_gets_final_audit_warning(self):
+        exp = _empty_expediente(self.tmp)
+        bloques = exp / "bloques"
+        auditoria = exp / "auditoria"
+        bloques.mkdir()
+        auditoria.mkdir()
+        (bloques / "I_conclusiones.md").write_text(
+            "## I. Conclusiones legacy\n\nTexto tecnico previo.",
+            encoding="utf-8",
+        )
+        (auditoria / "final_audit_result.json").write_text(
+            json.dumps({"status": "NO_CONFORME", "issues": []}),
+            encoding="utf-8",
+        )
+
+        result = build_document_markdown(exp, write_outputs=False)
+        block_i = next(b for b in result.blocks if b.block_id == "I")
+
+        self.assertIn("NO_CONFORME", block_i.markdown)
+        self.assertIn("NO CONFORME", block_i.markdown)
+        self.assertTrue(any("NO_CONFORME" in w for w in block_i.warnings))
+
+    def test_existing_block_i_gets_im09_status(self):
+        exp = _empty_expediente(self.tmp)
+        bloques = exp / "bloques"
+        auditoria = exp / "auditoria"
+        bloques.mkdir()
+        auditoria.mkdir()
+        (bloques / "I_conclusiones.md").write_text(
+            "## I. Conclusiones legacy\n\nTexto tecnico previo.",
+            encoding="utf-8",
+        )
+        (auditoria / "conditional_chain_result.json").write_text(
+            json.dumps({"status": "OK", "error_count": 0, "warning_count": 0}),
+            encoding="utf-8",
+        )
+
+        result = build_document_markdown(exp, write_outputs=False)
+        block_i = next(b for b in result.blocks if b.block_id == "I")
+
+        self.assertIn("IM-09", block_i.markdown)
+        self.assertIn("OK", block_i.markdown)
+        self.assertTrue(any("IM-09" in w for w in block_i.warnings))
+
     def test_generated_f_g_follow_canonical_order(self):
         exp = _minimal_expediente(self.tmp)
         result = build_document_markdown(exp, write_outputs=False)
