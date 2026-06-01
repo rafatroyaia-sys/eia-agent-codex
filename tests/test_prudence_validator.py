@@ -823,6 +823,61 @@ class TestValidatePrudenceFromFiles(unittest.TestCase):
             result = validate_prudence_from_files(tmp)
             self.assertGreaterEqual(len(result.checked_sources), 3)
 
+    def test_generated_auditoria_dir_not_scanned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            aud_dir = Path(tmp) / "auditoria"
+            aud_dir.mkdir()
+            (aud_dir / "prudence_validation_result.md").write_text(
+                "Frase prohibida detectada: 'sin afeccion'.",
+                encoding="utf-8",
+            )
+
+            result = validate_prudence_from_files(tmp)
+
+            self.assertEqual(result.error_count(), 0)
+            self.assertFalse(any(src.startswith("auditoria") for src in result.checked_sources))
+
+    def test_no_se_afirma_context_is_info(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            imp_dir = Path(tmp) / "impactos"
+            imp_dir.mkdir()
+            (imp_dir / "AG09_valoracion.md").write_text(
+                'No se afirma "sin afeccion"; se usa formulacion prudente.',
+                encoding="utf-8",
+            )
+
+            result = validate_prudence_from_files(tmp)
+
+            self.assertEqual(result.error_count(), 0)
+            self.assertTrue(all(issue.severity == "INFO" for issue in result.issues))
+
+    def test_conesa_significance_terms_allowed_in_impact_markdowns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            imp_dir = Path(tmp) / "impactos"
+            imp_dir.mkdir()
+            (imp_dir / "AG09_valoracion.md").write_text(
+                "Clasificacion Conesa: compatible, moderado, severo y critico.",
+                encoding="utf-8",
+            )
+
+            result = validate_prudence_from_files(tmp)
+
+            self.assertEqual(result.warning_count(), 0)
+            self.assertEqual(result.error_count(), 0)
+
+    def test_inventory_markdown_still_flags_significance_terms(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            inv_dir = Path(tmp) / "inventario"
+            inv_dir.mkdir()
+            (inv_dir / "FI_001.md").write_text(
+                "El impacto se considera compatible sin medicion.",
+                encoding="utf-8",
+            )
+
+            result = validate_prudence_from_files(tmp)
+
+            self.assertGreater(result.warning_count(), 0)
+
 
 # ---------------------------------------------------------------------------
 # 10. TestBuildPrudenceReportMarkdown

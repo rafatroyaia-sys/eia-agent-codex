@@ -156,6 +156,9 @@ _METHODOLOGICAL_INDICATORS: tuple[str, ...] = (
     "incorrecto",
     "lenguaje prohibido",
     "no se puede afirmar",
+    "no se afirma",
+    "formulacion correcta",
+    "formulacion conforme",
     "patron imprudente",
     "imprudence",
     "prohibited",
@@ -176,6 +179,9 @@ _FACTOR_PRUDENCE_CATEGORIES: dict[str, list[str]] = {
     "FI-015": ["general", "inventory", "climate"],
 }
 _DEFAULT_FACTOR_CATEGORIES: list[str] = ["general", "inventory"]
+_DOCUMENT_MARKDOWN_CATEGORIES: str = (
+    "general,red_natura,biodiversity,heritage,noise_air,hydrology,climate"
+)
 
 # Palabras que indican un impacto positivo está siendo usado para compensar negativos
 _COMPENSATION_PHRASES: list[str] = [
@@ -714,6 +720,14 @@ def validate_markdown_prudence(
     )
 
 
+def _category_for_markdown_source(rel_source: str) -> str:
+    """Selecciona categorias segun la naturaleza documental de la fuente."""
+    normalized = rel_source.replace("\\", "/").lower()
+    if normalized.startswith("inventario/"):
+        return "all"
+    return _DOCUMENT_MARKDOWN_CATEGORIES
+
+
 # ---------------------------------------------------------------------------
 # validate_prudence_from_files
 # ---------------------------------------------------------------------------
@@ -727,12 +741,13 @@ def validate_prudence_from_files(
       - inventario/*.md
       - impactos/*.md
       - bloques/*.md (si existe)
-      - auditoria/*.md (si existe)
+      - no revisa auditoria/*.md generados
 
     No revisa:
       - docs/ del proyecto (para evitar falsos positivos de documentación)
       - prompts/
       - control_interno/ (interno, no destinado al DA)
+      - auditoria/ (informes generados que citan incidencias)
       - src/ ni tests/
 
     Si no se encuentran archivos: devuelve WARNING, no excepción.
@@ -752,7 +767,6 @@ def validate_prudence_from_files(
         exp_path / "inventario",
         exp_path / "impactos",
         exp_path / "bloques",
-        exp_path / "auditoria",
     ]
 
     all_issues: list[PrudenceIssue] = []
@@ -772,7 +786,8 @@ def validate_prudence_from_files(
                 continue
 
             rel_source = str(md_path.relative_to(exp_path))
-            result = validate_markdown_prudence(text, source=rel_source, category="all")
+            category = _category_for_markdown_source(rel_source)
+            result = validate_markdown_prudence(text, source=rel_source, category=category)
             all_issues.extend(result.issues)
             all_sources.append(rel_source)
             found_any = True

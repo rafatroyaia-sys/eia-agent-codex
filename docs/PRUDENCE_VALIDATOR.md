@@ -85,9 +85,15 @@ Escanea los markdowns del expediente en los directorios:
 - `inventario/*.md`
 - `impactos/*.md`
 - `bloques/*.md` (si existe)
-- `auditoria/*.md` (si existe)
+- no escanea `auditoria/*.md` generados, para evitar falsos positivos en
+  informes que citan frases prohibidas como parte de la propia auditoria
 
-No escanea `docs/`, `prompts/`, `control_interno/`, `src/`, `tests/`.
+No escanea `docs/`, `prompts/`, `control_interno/`, `auditoria/`, `src/`, `tests/`.
+
+Las categorias se aplican segun la fuente: `inventario/*.md` mantiene la
+categoria completa, mientras que `impactos/*.md` y `bloques/*.md` no penalizan
+terminos Conesa (`compatible`, `moderado`, `severo`, `critico`) cuando aparecen
+como clasificacion tecnica de impactos.
 
 Si no hay markdowns: devuelve `WARNING`, no excepción.  
 Si el directorio no existe: lanza `FileNotFoundError`.
