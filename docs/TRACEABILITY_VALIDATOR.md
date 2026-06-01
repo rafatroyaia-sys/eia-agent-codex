@@ -112,7 +112,7 @@ Devuelve `(status, candidate_refs)`.
 Valida un markdown completo. TRAZADO → sin incidencia; PARCIAL → WARNING; NO_TRAZADO → ERROR.
 
 ### `validate_traceability_from_files(expediente_path) -> TraceabilityResult`
-Carga referencias + revisa markdowns de `bloques/`, `inventario/`, `impactos/`, `auditoria/`. Lanza `FileNotFoundError` si el expediente no existe. Devuelve WARNING si no hay markdowns.
+Carga referencias + revisa markdowns de `bloques/`, `inventario/` e `impactos/`. No escanea `auditoria/*.md` generados, para evitar que los informes internos se autogeneren incidencias de trazabilidad. Lanza `FileNotFoundError` si el expediente no existe. Devuelve WARNING si no hay markdowns.
 
 ### `build_traceability_report_markdown(result) -> str`
 Informe en 9 secciones: resumen, fuentes, referencias, trazadas, parciales, no trazadas, incidencias, recomendaciones, advertencia de alcance.

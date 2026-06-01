@@ -825,9 +825,11 @@ def validate_traceability_from_files(
     """Valida trazabilidad revisando markdowns del expediente.
 
     Carga referencias desde JSONs disponibles, luego revisa los markdowns
-    en: bloques/, inventario/, impactos/, auditoria/.
+    en: bloques/, inventario/ e impactos/.
 
-    No revisa: docs/, prompts/, control_interno/, src/, tests/.
+    No revisa: docs/, prompts/, control_interno/, auditoria/, src/, tests/.
+    Los informes de auditoria se usan como referencias JSON cuando procede,
+    pero no como texto del Documento Ambiental para evitar autoincidencias.
 
     Si no hay markdowns: devuelve WARNING, no excepción.
     Si el directorio no existe: lanza FileNotFoundError.
@@ -849,7 +851,6 @@ def validate_traceability_from_files(
         exp_path / "bloques",
         exp_path / "inventario",
         exp_path / "impactos",
-        exp_path / "auditoria",
     ]
 
     all_results: list[TraceabilityResult] = []

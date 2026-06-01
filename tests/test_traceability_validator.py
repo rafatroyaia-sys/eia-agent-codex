@@ -702,6 +702,20 @@ class TestValidateTraceabilityFromFiles(unittest.TestCase):
             result = validate_traceability_from_files(tmp)
             self.assertGreaterEqual(len(result.checked_sources), 3)
 
+    def test_generated_auditoria_dir_not_scanned(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            aud_dir = Path(tmp) / "auditoria"
+            aud_dir.mkdir()
+            (aud_dir / "traceability_validation_result.md").write_text(
+                "La parcela tiene 50 ha de superficie.",
+                encoding="utf-8",
+            )
+
+            result = validate_traceability_from_files(tmp)
+
+            self.assertEqual(result.error_count(), 0)
+            self.assertFalse(any(src.startswith("auditoria") for src in result.checked_sources))
+
     def test_notes_populated(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             result = validate_traceability_from_files(tmp)
