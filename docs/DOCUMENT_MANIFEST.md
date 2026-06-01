@@ -37,8 +37,8 @@ lo que existe antes de intentar escribir nada.
 | C | Identificación y valoración de impactos |
 | D | Medidas preventivas, correctoras, protectoras, diagnósticas y documentales |
 | E | Programa de vigilancia ambiental |
-| F | Vulnerabilidad ante riesgos y catástrofes |
-| G | Alternativas y justificación de solución adoptada |
+| F | Alternativas y justificación de solución adoptada |
+| G | Vulnerabilidad ante riesgos y catástrofes |
 | H | Red Natura 2000 y espacios naturales protegidos |
 | I | Conclusiones técnicas |
 | J | Resumen no técnico |

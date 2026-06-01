@@ -31,8 +31,8 @@ DOCUMENT_BLOCKS: list[tuple[str, str]] = [
     ("C", "Identificacion y valoracion de impactos"),
     ("D", "Medidas preventivas, correctoras, protectoras, diagnosticas y documentales"),
     ("E", "Programa de vigilancia ambiental"),
-    ("F", "Vulnerabilidad ante riesgos y catastrofes"),
-    ("G", "Alternativas y justificacion de solucion adoptada"),
+    ("F", "Alternativas y justificacion de solucion adoptada"),
+    ("G", "Vulnerabilidad ante riesgos y catastrofes"),
     ("H", "Red Natura 2000 y espacios naturales protegidos"),
     ("I", "Conclusiones tecnicas"),
     ("J", "Resumen no tecnico"),
@@ -69,12 +69,12 @@ DOCUMENT_REQUIRED_INPUTS: dict[str, list[str]] = {
         "impactos/pva_coverage_result.json",
     ],
     "F": [
-        "inventario/inventory_summary.json",
-        "impactos/phase6_model_with_conesa.json",
-    ],
-    "G": [
         "capas/normativa_aplicable.json",
         "capas/hechos_confirmados.json",
+    ],
+    "G": [
+        "inventario/inventory_summary.json",
+        "impactos/phase6_model_with_conesa.json",
     ],
     "H": [
         "inventario/inventory_summary.json",
@@ -117,11 +117,11 @@ DOCUMENT_OPTIONAL_INPUTS: dict[str, list[str]] = {
         "impactos/pva_coverage_result.md",
     ],
     "F": [
-        "capas/cartografia_trace.json",
+        "control_interno/phase3_result.json",
         "capas/inferencias_y_gaps.json",
     ],
     "G": [
-        "control_interno/phase3_result.json",
+        "capas/cartografia_trace.json",
         "capas/inferencias_y_gaps.json",
     ],
     "H": [
@@ -138,6 +138,23 @@ DOCUMENT_OPTIONAL_INPUTS: dict[str, list[str]] = {
         "anejos",
         "cartografia",
     ],
+}
+
+# Bloques A-K ya redactados por AG-10 en expedientes piloto o avanzados.
+# Si existen, son una fuente documental valida para ensamblado aunque falten
+# outputs JSON intermedios del pipeline productizado.
+CANONICAL_BLOCK_MARKDOWN: dict[str, str] = {
+    "A": "bloques/A_identificacion_y_descripcion.md",
+    "B": "bloques/B_inventario_ambiental.md",
+    "C": "bloques/C_impactos.md",
+    "D": "bloques/D_medidas.md",
+    "E": "bloques/E_PVA.md",
+    "F": "bloques/F_alternativas.md",
+    "G": "bloques/G_vulnerabilidad.md",
+    "H": "bloques/H_red_natura_2000.md",
+    "I": "bloques/I_conclusiones.md",
+    "J": "bloques/J_resumen_no_tecnico.md",
+    "K": "bloques/K_referencias.md",
 }
 
 
@@ -305,9 +322,22 @@ def build_document_manifest(
         ]
 
         status = _determine_status(required, existing_req)
+        block_source = CANONICAL_BLOCK_MARKDOWN.get(block_id)
+        has_block_source = bool(block_source and _path_exists(exp_path, block_source))
+
+        if has_block_source and block_source not in existing_opt:
+            existing_opt.append(block_source)
+        if has_block_source:
+            status = "READY"
 
         block_notes: list[str] = []
         block_warnings: list[str] = []
+
+        if has_block_source:
+            block_notes.append(
+                "Bloque A-K preexistente detectado en bloques/; se acepta como "
+                "fuente documental para ensamblado."
+            )
 
         if status == "PARTIAL":
             block_warnings.append(

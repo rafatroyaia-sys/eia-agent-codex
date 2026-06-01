@@ -300,6 +300,34 @@ class TestBuildDocumentManifest(unittest.TestCase):
             e_item = next(i for i in result.manifest_items if i.block_id == "E")
             self.assertEqual(e_item.status, "READY")
 
+    def test_existing_bloques_markdown_make_manifest_ready(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exp = _build_expediente_with_files(tmp, [
+                "bloques/A_identificacion_y_descripcion.md",
+                "bloques/B_inventario_ambiental.md",
+                "bloques/C_impactos.md",
+                "bloques/D_medidas.md",
+                "bloques/E_PVA.md",
+                "bloques/F_alternativas.md",
+                "bloques/G_vulnerabilidad.md",
+                "bloques/H_red_natura_2000.md",
+                "bloques/I_conclusiones.md",
+                "bloques/J_resumen_no_tecnico.md",
+                "bloques/K_referencias.md",
+            ])
+            result = build_document_manifest(exp)
+            self.assertEqual(result.ready_count(), 11)
+            self.assertEqual(result.missing_count(), 0)
+
+    def test_block_f_g_titles_follow_ag10_convention(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            exp = Path(tmp) / "EIA-TEST"
+            exp.mkdir()
+            result = build_document_manifest(exp)
+            titles = {i.block_id: i.title for i in result.manifest_items}
+            self.assertIn("Alternativas", titles["F"])
+            self.assertIn("Vulnerabilidad", titles["G"])
+
     def test_partial_when_some_files_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
             # Only inventory files, no impactos

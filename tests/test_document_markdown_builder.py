@@ -946,6 +946,32 @@ class TestBuildDocumentMarkdown(unittest.TestCase):
         for bid in BLOCK_ORDER:
             self.assertIn(bid, ids)
 
+    def test_existing_bloques_markdown_are_used_as_sources(self):
+        exp = _empty_expediente(self.tmp)
+        bloques = exp / "bloques"
+        bloques.mkdir()
+        (bloques / "A_identificacion_y_descripcion.md").write_text(
+            "## A. Bloque legado\n\nContenido AG-10 existente.",
+            encoding="utf-8",
+        )
+
+        result = build_document_markdown(exp, write_outputs=False)
+        block_a = next(b for b in result.blocks if b.block_id == "A")
+
+        self.assertEqual(block_a.status, "GENERATED")
+        self.assertEqual(block_a.source_files, ["bloques/A_identificacion_y_descripcion.md"])
+        self.assertIn("Contenido AG-10 existente", block_a.markdown)
+
+    def test_generated_f_g_follow_canonical_order(self):
+        exp = _minimal_expediente(self.tmp)
+        result = build_document_markdown(exp, write_outputs=False)
+        blocks = {b.block_id: b for b in result.blocks}
+
+        self.assertIn("Alternativas", blocks["F"].title)
+        self.assertIn("Vulnerabilidad", blocks["G"].title)
+        self.assertIn("Bloque F", blocks["F"].markdown)
+        self.assertIn("Bloque G", blocks["G"].markdown)
+
     def test_write_creates_documento_dir_only(self):
         exp = _minimal_expediente(self.tmp)
         build_document_markdown(exp, write_outputs=True)

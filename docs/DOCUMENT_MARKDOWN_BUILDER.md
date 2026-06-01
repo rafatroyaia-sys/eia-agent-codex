@@ -42,8 +42,8 @@ DOC-00 inventaría lo que existe, y DOC-01 lee esos archivos y genera el texto.
 | C | Identificación y valoración de impactos | `impactos/phase6_model_with_conesa.json`, `impactos/cumulative_synergistic_result.json`, `auditoria/conesa_check_result.json`, `auditoria/conditional_chain_result.json` |
 | D | Medidas preventivas, correctoras, protectoras, diagnósticas y documentales | `impactos/phase6_model_with_measures.json`, `auditoria/diagnostic_measure_validation_result.json`, `auditoria/prl_measure_validation_result.json` |
 | E | Programa de vigilancia ambiental | `impactos/phase6_model_with_pva.json`, `impactos/pva_coverage_result.json` |
-| F | Vulnerabilidad ante riesgos y catástrofes | `inventario/inventory_summary.json`, `impactos/phase6_model_with_conesa.json` |
-| G | Alternativas y justificación de solución adoptada | `control_interno/phase3_result.json` (siempre PARTIAL: requiere datos del promotor) |
+| F | Alternativas y justificación de solución adoptada | `control_interno/phase3_result.json` (normalmente PARTIAL: requiere datos del promotor) |
+| G | Vulnerabilidad ante riesgos y catástrofes | `inventario/inventory_summary.json`, `impactos/phase6_model_with_conesa.json` |
 | H | Red Natura 2000 y espacios naturales protegidos | `inventario/inventory_summary.json`, `impactos/phase6_model_with_conesa.json`, `auditoria/block_consistency_result.json` |
 | I | Conclusiones técnicas | `auditoria/final_audit_result.json`, `impactos/cumulative_synergistic_result.json`, `auditoria/conditional_chain_result.json` |
 | J | Resumen no técnico | `auditoria/final_audit_result.json`, `impactos/phase6_model_with_pva.json` (+ datos de A/B/C/D/E) |
@@ -180,7 +180,7 @@ Métodos: `generated_count()`, `partial_count()`, `missing_count()`,
    - "apto administrativamente"
    - "se descarta"
    - "todos compatibles"
-7. **Bloque G siempre PARTIAL**: en modo gabinete las alternativas requieren datos del promotor.
+7. **Bloque F normalmente PARTIAL**: en modo gabinete las alternativas requieren datos del promotor.
 8. **Bloque I propaga estado de auditoría final (DOC-05)**: si `auditoria/final_audit_result.json`
    existe, el Bloque I muestra el estado (`NO CONFORME`, `CONFORME_CON_OBSERVACIONES`, etc.)
    con un aviso según la severidad. El aviso para `NO CONFORME` usa la frase exacta

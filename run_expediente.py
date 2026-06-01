@@ -1861,6 +1861,31 @@ def cmd_document_numbering(exp_path: Path, write: bool, apply_styles: bool) -> i
     return 0 if result.is_valid() else 1
 
 
+def cmd_cliente_da(exp_path: Path, write: bool, prod: bool) -> int:
+    """Flujo completo DA-01: pipeline tecnico + cadena documental + estado final (DA-01)."""
+    from eia_agent.core.document_flow_da import (
+        run_da_flow,
+        write_da_flow_outputs,
+    )
+
+    mode = "PROD" if prod else "TEST"
+    try:
+        result = run_da_flow(exp_path, write=write, mode=mode)
+    except Exception as exc:
+        print(f"Error en flujo DA-01: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        json_path, md_path = write_da_flow_outputs(result, exp_path)
+        print(f"\nInforme de estado:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if not result.has_blocking() else 1
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -2616,6 +2641,32 @@ Ejemplos:
         ),
     )
 
+    da01_p = sub.add_parser(
+        "cliente-da",
+        help=(
+            "Flujo completo DA-01: pipeline tecnico + cadena documental + informe de estado "
+            "(DA-01). Genera todos los outputs del Documento Ambiental y clasifica cada item "
+            "como CERRADO, PENDIENTE o BLOQUEANTE. --write requerido para outputs completos."
+        ),
+    )
+    da01_p.add_argument(
+        "--write",
+        action="store_true",
+        help=(
+            "Escribir todos los outputs del flujo: pipeline, documento MD/DOCX, "
+            "figuras, QC, paquete, ZIP, presentacion, estructura, numeracion, TOC "
+            "y estado_expediente_da.json/.md."
+        ),
+    )
+    da01_p.add_argument(
+        "--prod",
+        action="store_true",
+        help=(
+            "Modo produccion (mode=PROD) para el pipeline tecnico. "
+            "No cambia administrative_ready=False."
+        ),
+    )
+
     return parser
 
 
@@ -2751,6 +2802,9 @@ def main(argv=None) -> int:
         apply_toc = getattr(args, "apply", False)
         replace_placeholder = not getattr(args, "no_replace", False)
         return cmd_document_toc(exp_path, args.write, apply_toc, replace_placeholder)
+
+    if args.command == "cliente-da":
+        return cmd_cliente_da(exp_path, args.write, getattr(args, "prod", False))
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()

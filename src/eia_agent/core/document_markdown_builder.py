@@ -22,7 +22,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from eia_agent.core.document_manifest import build_document_manifest
+from eia_agent.core.document_manifest import (
+    CANONICAL_BLOCK_MARKDOWN,
+    build_document_manifest,
+)
 
 # ---------------------------------------------------------------------------
 # Constantes públicas
@@ -2008,19 +2011,62 @@ def assemble_document_markdown(blocks: list[DocumentBlockBuildResult]) -> str:
 # Función principal
 # ---------------------------------------------------------------------------
 
+def _relabel_block_result(
+    result: DocumentBlockBuildResult,
+    block_id: str,
+    title: str,
+) -> DocumentBlockBuildResult:
+    """Adapta builders historicos F/G al orden canonico del expediente."""
+    old_id = result.block_id
+    old_title = result.title
+    markdown = result.markdown
+    if old_id != block_id:
+        markdown = markdown.replace(f"Bloque {old_id}", f"Bloque {block_id}")
+    if old_title != title:
+        markdown = markdown.replace(old_title, title, 1)
+    result.block_id = block_id
+    result.title = title
+    result.markdown = markdown
+    return result
+
+
 _BLOCK_BUILDERS = {
     "A": build_block_a,
     "B": build_block_b,
     "C": build_block_c,
     "D": build_block_d,
     "E": build_block_e,
-    "F": build_block_f,
-    "G": build_block_g,
+    "F": build_block_g,
+    "G": build_block_f,
     "H": build_block_h,
     "I": build_block_i,
     "J": build_block_j,
     "K": build_block_k,
 }
+
+
+def _build_block_from_existing_markdown(
+    exp_path: Path,
+    block_id: str,
+    title: str,
+) -> DocumentBlockBuildResult | None:
+    """Usa bloques AG-10 ya redactados cuando existen en expedientes avanzados."""
+    rel = CANONICAL_BLOCK_MARKDOWN.get(block_id)
+    if not rel:
+        return None
+    md = safe_read_text(exp_path / rel)
+    if md is None or not md.strip():
+        return None
+    return DocumentBlockBuildResult(
+        block_id=block_id,
+        title=title,
+        status="GENERATED",
+        source_files=[rel],
+        markdown=md.strip(),
+        notes=[
+            "Bloque preexistente en bloques/ usado como fuente documental.",
+        ],
+    )
 
 
 def build_document_markdown(
@@ -2058,7 +2104,14 @@ def build_document_markdown(
             continue
 
         try:
-            block_result = builder(exp_path, manifest_item)
+            block_result = _build_block_from_existing_markdown(
+                exp_path, block_id, manifest_item.title
+            )
+            if block_result is None:
+                block_result = builder(exp_path, manifest_item)
+                block_result = _relabel_block_result(
+                    block_result, block_id, manifest_item.title
+                )
         except Exception as exc:
             block_result = DocumentBlockBuildResult(
                 block_id=block_id,
