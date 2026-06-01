@@ -16,7 +16,7 @@ Proporciona acceso desde consola a los módulos de productización:
   document-manifest, document-build-md, document-build-docx,
   document-insert-figures, document-qc, document-package, document-export,
   document-prepare-presentation, audit-positive-gaps,
-  document-structure, document-numbering, document-toc.
+  document-structure, document-numbering, document-toc, cliente-plan.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -47,6 +47,7 @@ Uso:
     python run_expediente.py <expediente> document-prepare-presentation [--write] [--no-final-docx]
     python run_expediente.py <expediente> audit-positive-gaps [--write]
     python run_expediente.py <expediente> document-toc [--write] [--apply] [--no-replace]
+    python run_expediente.py <expediente> cliente-plan [--write]
 """
 import argparse
 import sys
@@ -1886,6 +1887,30 @@ def cmd_cliente_da(exp_path: Path, write: bool, prod: bool) -> int:
     return 0 if not result.has_blocking() else 1
 
 
+def cmd_cliente_plan(exp_path: Path, write: bool) -> int:
+    """Plan de accion cliente: peticiones al promotor + acciones internas."""
+    from eia_agent.core.client_action_plan import (
+        build_client_action_plan,
+        write_client_action_plan_outputs,
+    )
+
+    try:
+        result = build_client_action_plan(exp_path)
+    except Exception as exc:
+        print(f"Error generando plan de accion cliente: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        json_path, md_path = write_client_action_plan_outputs(result, exp_path)
+        print("\nPlan de accion:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if not result.warnings else 1
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -2667,6 +2692,19 @@ Ejemplos:
         ),
     )
 
+    plan_p = sub.add_parser(
+        "cliente-plan",
+        help=(
+            "Generar plan de accion cliente: peticiones al promotor y acciones "
+            "internas pendientes a partir de DA-01/AU-04. No declara aptitud."
+        ),
+    )
+    plan_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir documento/plan_accion_cliente.json y .md.",
+    )
+
     return parser
 
 
@@ -2805,6 +2843,8 @@ def main(argv=None) -> int:
 
     if args.command == "cliente-da":
         return cmd_cliente_da(exp_path, args.write, getattr(args, "prod", False))
+    if args.command == "cliente-plan":
+        return cmd_cliente_plan(exp_path, args.write)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()

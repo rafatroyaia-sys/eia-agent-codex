@@ -133,6 +133,18 @@ Ver `docs/INVENTORY_LEGACY_ADAPTER.md`.
 
 ---
 
+## Plan de accion cliente
+
+Tras ejecutar `cliente-da --write`, el comando `cliente-plan --write` genera
+`documento/plan_accion_cliente.json` y `.md`. El plan separa lo que debe pedirse
+al promotor (por ejemplo alternativas o cartografia suficiente) de las
+correcciones internas del equipo tecnico (lenguaje prudente, coherencia,
+trazabilidad o estructura).
+
+Ver `docs/CLIENT_ACTION_PLAN.md`.
+
+---
+
 ## Normativa mínima por expediente
 
 - **Ley 21/2013**: arts. 7, 16, 45, 46, 47, Anexos II, III
