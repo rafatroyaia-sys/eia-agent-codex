@@ -17,8 +17,8 @@ Proporciona acceso desde consola a los módulos de productización:
   document-insert-figures, document-qc, document-package, document-export,
   document-prepare-presentation, audit-positive-gaps,
   document-structure, document-numbering, document-toc, cliente-intake,
-  cliente-form-schema, cliente-plan, cliente-dashboard, cliente-portal,
-  cliente-portal-site.
+  cliente-form-schema, cliente-submission-check, cliente-plan,
+  cliente-dashboard, cliente-portal, cliente-portal-site.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -51,6 +51,7 @@ Uso:
     python run_expediente.py <expediente> document-toc [--write] [--apply] [--no-replace]
     python run_expediente.py <expediente> cliente-intake [--write]
     python run_expediente.py <expediente> cliente-form-schema [--write]
+    python run_expediente.py <expediente> cliente-submission-check [--write]
     python run_expediente.py <expediente> cliente-plan [--write]
     python run_expediente.py <expediente> cliente-dashboard [--write]
     python run_expediente.py <expediente> cliente-portal [--write]
@@ -1990,6 +1991,30 @@ def cmd_cliente_form_schema(exp_path: Path, write: bool) -> int:
     return 0
 
 
+def cmd_cliente_submission_check(exp_path: Path, write: bool) -> int:
+    """Validacion entrega cliente: faltantes, formatos y coordenadas basicas."""
+    from eia_agent.core.client_submission_validator import (
+        build_client_submission_validation,
+        write_client_submission_validation_outputs,
+    )
+
+    try:
+        result = build_client_submission_validation(exp_path)
+    except Exception as exc:
+        print(f"Error validando entrega cliente: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        json_path, md_path = write_client_submission_validation_outputs(result, exp_path)
+        print("\nValidacion entrega cliente:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if result.can_start_initial_processing else 1
+
+
 def cmd_cliente_portal(exp_path: Path, write: bool) -> int:
     """Portal cliente: paquete unico intake + dashboard + siguientes pasos."""
     from eia_agent.core.client_portal import (
@@ -2860,6 +2885,19 @@ Ejemplos:
         help="Escribir documento/cliente_form_schema.json y .md.",
     )
 
+    submission_p = sub.add_parser(
+        "cliente-submission-check",
+        help=(
+            "Validar entrega cliente contra el formulario: obligatorios, formatos "
+            "y coordenadas basicas. No declara aptitud."
+        ),
+    )
+    submission_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir documento/cliente_submission_validation.json y .md.",
+    )
+
     dash_p = sub.add_parser(
         "cliente-dashboard",
         help=(
@@ -3043,6 +3081,8 @@ def main(argv=None) -> int:
         return cmd_cliente_intake(exp_path, args.write)
     if args.command == "cliente-form-schema":
         return cmd_cliente_form_schema(exp_path, args.write)
+    if args.command == "cliente-submission-check":
+        return cmd_cliente_submission_check(exp_path, args.write)
     if args.command == "cliente-dashboard":
         return cmd_cliente_dashboard(exp_path, args.write)
     if args.command == "cliente-portal":
