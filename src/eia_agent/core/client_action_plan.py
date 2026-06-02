@@ -80,6 +80,7 @@ class ClientActionPlan:
             "administrative_ready": self.administrative_ready,
             "promoter_requests": [i.to_dict() for i in self.promoter_requests],
             "technical_actions": [i.to_dict() for i in self.technical_actions],
+            "closing_route": _build_closing_route_steps(self),
             "counts": {
                 "promoter_requests": len(self.promoter_requests),
                 "promoter_high": self.promoter_high_count(),
@@ -375,6 +376,69 @@ def _renumber_items(items: list[ClientActionItem], prefix: str = "ACP") -> None:
         item.action_id = f"{prefix}-{idx:03d}"
 
 
+def _build_closing_route_steps(plan: ClientActionPlan) -> list[dict[str, Any]]:
+    """Devuelve la ruta de cierre en formato estructurado para UI/API."""
+    promoter_high = [i for i in plan.promoter_requests if i.priority == "ALTA"]
+    technical_high = [i for i in plan.technical_actions if i.priority == "ALTA"]
+    promoter_rest = [i for i in plan.promoter_requests if i.priority != "ALTA"]
+    technical_rest = [i for i in plan.technical_actions if i.priority != "ALTA"]
+
+    steps: list[dict[str, Any]] = []
+
+    def add_step(title: str, audience: str, priority: str, action_refs: list[str]) -> None:
+        steps.append({
+            "order": len(steps) + 1,
+            "title": title,
+            "audience": audience,
+            "priority": priority,
+            "action_refs": action_refs,
+        })
+
+    if not any([promoter_high, technical_high, promoter_rest, technical_rest]):
+        add_step(
+            "Ejecutar de nuevo las auditorias cuando existan outputs del expediente.",
+            "EQUIPO_TECNICO",
+            "MEDIA",
+            [],
+        )
+        return steps
+
+    if promoter_high:
+        add_step(
+            f"Solicitar al promotor los {len(promoter_high)} item(s) de criticidad ALTA.",
+            "PROMOTOR",
+            "ALTA",
+            [i.action_id for i in promoter_high],
+        )
+    if technical_high:
+        add_step(
+            f"Resolver las {len(technical_high)} accion(es) tecnicas ALTA antes de regenerar el documento.",
+            "EQUIPO_TECNICO",
+            "ALTA",
+            [i.action_id for i in technical_high],
+        )
+    if promoter_rest or technical_rest:
+        add_step(
+            "Cerrar los pendientes MEDIA/BAJA que condicionan calidad, firma o trazabilidad.",
+            "MIXTO",
+            "MEDIA",
+            [i.action_id for i in promoter_rest + technical_rest],
+        )
+    add_step(
+        "Regenerar Documento Ambiental, paquete documental, plan de accion y auditoria final.",
+        "EQUIPO_TECNICO",
+        "MEDIA",
+        [],
+    )
+    add_step(
+        "Revisar tecnicamente el resultado; este plan no sustituye firma ni validacion juridica.",
+        "EQUIPO_TECNICO",
+        "MEDIA",
+        [],
+    )
+    return steps
+
+
 def build_client_action_plan(expediente_path: str | Path) -> ClientActionPlan:
     """Construye un plan de accion desde outputs existentes del expediente."""
     exp = Path(expediente_path)
@@ -522,44 +586,12 @@ def build_client_action_plan_markdown(plan: ClientActionPlan) -> str:
 
 def _render_closing_route(plan: ClientActionPlan) -> list[str]:
     """Renderiza una ruta corta y ordenada para cerrar el expediente."""
-    promoter_high = [i for i in plan.promoter_requests if i.priority == "ALTA"]
-    technical_high = [i for i in plan.technical_actions if i.priority == "ALTA"]
-    promoter_rest = [i for i in plan.promoter_requests if i.priority != "ALTA"]
-    technical_rest = [i for i in plan.technical_actions if i.priority != "ALTA"]
-
     lines: list[str] = []
     lines.append("## Ruta recomendada de cierre")
     lines.append("")
 
-    if not any([promoter_high, technical_high, promoter_rest, technical_rest]):
-        lines.append(
-            "1. Ejecutar de nuevo las auditorias cuando existan outputs del expediente."
-        )
-        lines.append("")
-        return lines
-
-    step = 1
-    if promoter_high:
-        lines.append(
-            f"{step}. Solicitar al promotor los {len(promoter_high)} item(s) de criticidad ALTA."
-        )
-        step += 1
-    if technical_high:
-        lines.append(
-            f"{step}. Resolver las {len(technical_high)} accion(es) tecnicas ALTA antes de regenerar el documento."
-        )
-        step += 1
-    if promoter_rest or technical_rest:
-        lines.append(
-            f"{step}. Cerrar los pendientes MEDIA/BAJA que condicionan calidad, firma o trazabilidad."
-        )
-        step += 1
-    lines.append(
-        f"{step}. Regenerar Documento Ambiental, paquete documental, plan de accion y auditoria final."
-    )
-    lines.append(
-        f"{step + 1}. Revisar tecnicamente el resultado; este plan no sustituye firma ni validacion juridica."
-    )
+    for step in _build_closing_route_steps(plan):
+        lines.append(f"{step['order']}. {step['title']}")
     lines.append("")
     return lines
 

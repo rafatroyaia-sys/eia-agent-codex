@@ -28,6 +28,9 @@ Con `--write` genera:
 El Markdown incluye una ruta recomendada de cierre, separando primero los items
 ALTA del promotor, despues las acciones tecnicas ALTA, y finalmente la
 regeneracion del Documento Ambiental, paquete documental y auditoria final.
+El JSON expone esa misma ruta en `closing_route`, con `order`, `title`,
+`audience`, `priority` y `action_refs`, para que una UI pueda mostrarla sin
+parsear el Markdown.
 
 ## Reglas
 

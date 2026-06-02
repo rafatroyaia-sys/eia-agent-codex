@@ -150,6 +150,20 @@ class TestClientActionPlan(unittest.TestCase):
         self.assertFalse(plan.administrative_ready)
         self.assertFalse(plan.to_dict()["administrative_ready"])
 
+    def test_to_dict_contains_structured_closing_route(self):
+        self._write_audit()
+        plan = build_client_action_plan(self.exp)
+        data = plan.to_dict()
+
+        route = data["closing_route"]
+
+        self.assertEqual(route[0]["order"], 1)
+        self.assertEqual(route[0]["audience"], "PROMOTOR")
+        self.assertEqual(route[0]["priority"], "ALTA")
+        self.assertEqual(route[0]["action_refs"], ["ACP-001", "ACP-002"])
+        self.assertIn("Solicitar al promotor", route[0]["title"])
+        self.assertIn("no sustituye firma", route[-1]["title"])
+
     def test_deduplicates_audit_and_da_state_same_requirement(self):
         self._write_audit()
         _write_json(self.exp / "documento" / "estado_expediente_da.json", {
