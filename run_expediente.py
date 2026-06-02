@@ -18,7 +18,7 @@ Proporciona acceso desde consola a los módulos de productización:
   document-prepare-presentation, audit-positive-gaps,
   document-structure, document-numbering, document-toc, cliente-intake,
   cliente-form-schema, cliente-submission-check, cliente-plan,
-  cliente-dashboard, cliente-portal, cliente-portal-site.
+  cliente-dashboard, cliente-portal, cliente-portal-site, cliente-trial-package.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -56,6 +56,7 @@ Uso:
     python run_expediente.py <expediente> cliente-dashboard [--write]
     python run_expediente.py <expediente> cliente-portal [--write]
     python run_expediente.py <expediente> cliente-portal-site [--write]
+    python run_expediente.py <expediente> cliente-trial-package [--write]
 """
 import argparse
 import sys
@@ -2065,6 +2066,25 @@ def cmd_cliente_portal_site(exp_path: Path, write: bool) -> int:
     return 0
 
 
+def cmd_cliente_trial_package(exp_path: Path, write: bool) -> int:
+    """Paquete de prueba cliente: HTML, contratos JSON/MD y ZIP entregable."""
+    from eia_agent.core.client_trial_package import build_client_trial_package
+
+    try:
+        result = build_client_trial_package(exp_path, write_outputs=write)
+    except Exception as exc:
+        print(f"Error generando paquete de prueba cliente: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+    if write:
+        print("\nPaquete de prueba cliente:")
+        print(f"  {result.package_dir}")
+        print(f"  {result.zip_path}")
+
+    return 0
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -2937,6 +2957,19 @@ Ejemplos:
         help="Escribir documento/portal_cliente/index.html.",
     )
 
+    trial_package_p = sub.add_parser(
+        "cliente-trial-package",
+        help=(
+            "Generar paquete de prueba cliente con portal HTML, JSON/Markdown "
+            "y ZIP entregable. No declara aptitud."
+        ),
+    )
+    trial_package_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir documento/cliente_trial_package/ y .zip.",
+    )
+
     return parser
 
 
@@ -3089,6 +3122,8 @@ def main(argv=None) -> int:
         return cmd_cliente_portal(exp_path, args.write)
     if args.command == "cliente-portal-site":
         return cmd_cliente_portal_site(exp_path, args.write)
+    if args.command == "cliente-trial-package":
+        return cmd_cliente_trial_package(exp_path, args.write)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()
