@@ -26,6 +26,7 @@ La salida JSON esta pensada para alimentar una UI/API con:
 - `headline`: lectura ejecutiva del estado.
 - `primary_action`: accion principal recomendada.
 - `intake`: resumen de completitud de entrada.
+- `form_schema`: controles y validaciones minimas para renderizar formularios.
 - `dashboard`: resumen tecnico ya calculado.
 - `upload_sections`: secciones de formulario/subida para memoria, coordenadas,
   fotos, planos, cartografia y alternativas.
@@ -51,4 +52,3 @@ El portal es una capa de producto. No sustituye:
 - revision/firma tecnica o juridica.
 
 Por diseno, `administrative_ready` permanece siempre en `false`.
-

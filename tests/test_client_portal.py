@@ -96,6 +96,8 @@ class TestClientPortal(unittest.TestCase):
         self.assertEqual(data["status"], "ESPERANDO_DOCUMENTACION_CLIENTE")
         self.assertFalse(data["administrative_ready"])
         self.assertFalse(data["intake"]["ready_for_initial_processing"])
+        self.assertEqual(data["form_schema"]["counts"]["total"], 11)
+        self.assertEqual(data["form_schema"]["counts"]["uploads"], 6)
         self.assertTrue(data["upload_sections"])
         self.assertEqual(data["next_steps"][0]["audience"], "PROMOTOR")
 
@@ -109,6 +111,7 @@ class TestClientPortal(unittest.TestCase):
 
         self.assertEqual(data["status"], "BLOQUEADO_POR_ITEMS_ALTA")
         self.assertTrue(data["intake"]["ready_for_initial_processing"])
+        self.assertIn("controls", data["form_schema"])
         self.assertEqual(data["dashboard"]["counts"]["promoter_high"], 1)
         self.assertTrue(any(a["available"] for a in data["artifacts"]))
         self.assertFalse(data["administrative_ready"])
@@ -120,6 +123,7 @@ class TestClientPortal(unittest.TestCase):
         md = build_client_portal_markdown(build_client_portal(self.exp))
 
         self.assertIn("# Portal cliente", md)
+        self.assertIn("## Formulario UI/API", md)
         self.assertIn("## Entrada cliente", md)
         self.assertIn("## Siguientes pasos", md)
         self.assertIn("## Artefactos", md)

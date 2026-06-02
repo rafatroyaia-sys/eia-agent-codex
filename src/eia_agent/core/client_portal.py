@@ -20,6 +20,10 @@ from eia_agent.core.client_dashboard import (
     ClientDashboard,
     build_client_dashboard,
 )
+from eia_agent.core.client_form_schema import (
+    ClientFormSchema,
+    build_client_form_schema,
+)
 from eia_agent.core.client_intake import (
     ClientIntake,
     IntakeRequirement,
@@ -76,6 +80,7 @@ class ClientPortal:
     primary_action: str
     administrative_ready: bool = False
     intake: dict[str, Any] = field(default_factory=dict)
+    form_schema: dict[str, Any] = field(default_factory=dict)
     dashboard: dict[str, Any] = field(default_factory=dict)
     upload_sections: list[PortalUploadSection] = field(default_factory=list)
     next_steps: list[dict[str, Any]] = field(default_factory=list)
@@ -91,6 +96,7 @@ class ClientPortal:
             "primary_action": self.primary_action,
             "administrative_ready": False,
             "intake": dict(self.intake),
+            "form_schema": dict(self.form_schema),
             "dashboard": dict(self.dashboard),
             "upload_sections": [s.to_dict() for s in self.upload_sections],
             "next_steps": list(self.next_steps),
@@ -102,6 +108,7 @@ class ClientPortal:
 
     def summary(self) -> str:
         intake_counts = self.intake.get("counts", {})
+        form_counts = self.form_schema.get("counts", {})
         available = sum(1 for artifact in self.artifacts if artifact.get("available"))
         return "\n".join([
             f"--- Portal cliente [{self.expediente_id}] ---",
@@ -109,6 +116,7 @@ class ClientPortal:
             f"Lectura      : {self.headline}",
             f"Accion       : {self.primary_action}",
             f"Intake       : {intake_counts.get('complete', 0)}/{intake_counts.get('total', 0)} completos",
+            f"Formulario   : {form_counts.get('total', 0)} controles",
             f"Artefactos   : {available}/{len(self.artifacts)} disponibles",
             "Admin ready  : False",
             f"NOTA: {DISCLAIMER}",
@@ -214,10 +222,15 @@ def _next_steps(intake: ClientIntake, dashboard: ClientDashboard) -> list[dict[s
     return steps
 
 
-def _source_files(intake: ClientIntake, dashboard: ClientDashboard) -> list[str]:
+def _source_files(
+    intake: ClientIntake,
+    dashboard: ClientDashboard,
+    form_schema: ClientFormSchema,
+) -> list[str]:
     seen: set[str] = set()
     result: list[str] = []
-    for source in list(intake.source_files) + list(dashboard.source_files):
+    sources = list(intake.source_files) + list(form_schema.source_files) + list(dashboard.source_files)
+    for source in sources:
         if source not in seen:
             result.append(source)
             seen.add(source)
@@ -228,12 +241,15 @@ def build_client_portal(expediente_path: str | Path) -> ClientPortal:
     """Construye el paquete unico del portal cliente desde outputs existentes."""
     exp = Path(expediente_path)
     intake = build_client_intake(exp)
+    form_schema = build_client_form_schema(exp)
     dashboard = build_client_dashboard(exp)
     status, headline, primary_action = _status_from_intake_and_dashboard(intake, dashboard)
 
     upload_sections = [_section_from_requirement(req) for req in intake.requirements]
     artifacts = [artifact.to_dict() for artifact in dashboard.artifacts]
-    warnings = list(dict.fromkeys(list(intake.warnings) + list(dashboard.warnings)))
+    warnings = list(dict.fromkeys(
+        list(intake.warnings) + list(form_schema.warnings) + list(dashboard.warnings)
+    ))
 
     return ClientPortal(
         expediente_id=exp.name,
@@ -246,6 +262,11 @@ def build_client_portal(expediente_path: str | Path) -> ClientPortal:
             "counts": intake.counts(),
             "warnings": list(intake.warnings),
         },
+        form_schema={
+            "counts": form_schema.counts(),
+            "controls": [control.to_dict() for control in form_schema.controls],
+            "warnings": list(form_schema.warnings),
+        },
         dashboard={
             "status": dashboard.status,
             "headline": dashboard.headline,
@@ -257,7 +278,7 @@ def build_client_portal(expediente_path: str | Path) -> ClientPortal:
         next_steps=_next_steps(intake, dashboard),
         artifacts=artifacts,
         warnings=warnings,
-        source_files=_source_files(intake, dashboard),
+        source_files=_source_files(intake, dashboard, form_schema),
     )
 
 
@@ -274,6 +295,13 @@ def build_client_portal_markdown(portal: ClientPortal) -> str:
         f"- Lectura: {portal.headline}",
         f"- Accion principal: {portal.primary_action}",
         "- administrative_ready: false",
+        "",
+        "## Formulario UI/API",
+        "",
+        f"- Controles: {portal.form_schema.get('counts', {}).get('total', 0)}",
+        f"- Campos: {portal.form_schema.get('counts', {}).get('fields', 0)}",
+        f"- Uploads: {portal.form_schema.get('counts', {}).get('uploads', 0)}",
+        f"- Obligatorios pendientes: {portal.form_schema.get('counts', {}).get('pending_required', 0)}",
         "",
         "## Entrada cliente",
         "",
