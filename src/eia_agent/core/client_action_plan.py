@@ -78,6 +78,7 @@ class ClientActionPlan:
         return {
             "expediente_id": self.expediente_id,
             "administrative_ready": self.administrative_ready,
+            "executive_summary": _build_executive_summary(self),
             "promoter_requests": [i.to_dict() for i in self.promoter_requests],
             "technical_actions": [i.to_dict() for i in self.technical_actions],
             "closing_route": _build_closing_route_steps(self),
@@ -439,6 +440,47 @@ def _build_closing_route_steps(plan: ClientActionPlan) -> list[dict[str, Any]]:
     return steps
 
 
+def _build_executive_summary(plan: ClientActionPlan) -> dict[str, Any]:
+    """Construye un resumen corto para cabecera de UI o informe ejecutivo."""
+    promoter_high = plan.promoter_high_count()
+    technical_high = plan.technical_high_count()
+    total_high = promoter_high + technical_high
+    total_items = len(plan.promoter_requests) + len(plan.technical_actions)
+
+    if total_high:
+        status = "BLOQUEADO_POR_ITEMS_ALTA"
+        headline = (
+            f"Expediente con {total_high} item(s) ALTA pendientes; "
+            "no debe considerarse cerrable para presentacion."
+        )
+        if promoter_high:
+            next_action = "Solicitar primero al promotor la documentacion ALTA pendiente."
+        else:
+            next_action = "Resolver primero las acciones tecnicas ALTA."
+    elif total_items:
+        status = "PENDIENTES_NO_BLOQUEANTES"
+        headline = (
+            "Expediente sin items ALTA en el plan, pero con pendientes de calidad "
+            "o cierre documental."
+        )
+        next_action = "Cerrar pendientes MEDIA/BAJA y regenerar auditorias."
+    else:
+        status = "SIN_ITEMS_DETECTADOS"
+        headline = "No hay items accionables detectados con las fuentes disponibles."
+        next_action = "Ejecutar o actualizar cliente-da y audit-final si faltan outputs."
+
+    return {
+        "status": status,
+        "headline": headline,
+        "next_action": next_action,
+        "has_high_priority": total_high > 0,
+        "promoter_high": promoter_high,
+        "technical_high": technical_high,
+        "total_items": total_items,
+        "administrative_ready": False,
+    }
+
+
 def build_client_action_plan(expediente_path: str | Path) -> ClientActionPlan:
     """Construye un plan de accion desde outputs existentes del expediente."""
     exp = Path(expediente_path)
@@ -501,6 +543,10 @@ def build_client_action_plan_markdown(plan: ClientActionPlan) -> str:
     lines.append("")
     lines.append("## Resumen")
     lines.append("")
+    summary = _build_executive_summary(plan)
+    lines.append(f"- Estado operativo: {summary['status']}")
+    lines.append(f"- Lectura ejecutiva: {summary['headline']}")
+    lines.append(f"- Siguiente accion: {summary['next_action']}")
     lines.append(f"- Peticiones al promotor: {len(plan.promoter_requests)}")
     lines.append(f"- Peticiones ALTA al promotor: {plan.promoter_high_count()}")
     lines.append(f"- Acciones tecnicas internas: {len(plan.technical_actions)}")

@@ -164,6 +164,18 @@ class TestClientActionPlan(unittest.TestCase):
         self.assertIn("Solicitar al promotor", route[0]["title"])
         self.assertIn("no sustituye firma", route[-1]["title"])
 
+    def test_to_dict_contains_executive_summary(self):
+        self._write_audit()
+        plan = build_client_action_plan(self.exp)
+        summary = plan.to_dict()["executive_summary"]
+
+        self.assertEqual(summary["status"], "BLOQUEADO_POR_ITEMS_ALTA")
+        self.assertTrue(summary["has_high_priority"])
+        self.assertEqual(summary["promoter_high"], 2)
+        self.assertEqual(summary["technical_high"], 1)
+        self.assertIn("Solicitar primero al promotor", summary["next_action"])
+        self.assertFalse(summary["administrative_ready"])
+
     def test_deduplicates_audit_and_da_state_same_requirement(self):
         self._write_audit()
         _write_json(self.exp / "documento" / "estado_expediente_da.json", {
@@ -198,6 +210,8 @@ class TestClientActionPlan(unittest.TestCase):
         plan = build_client_action_plan(self.exp)
         md = build_client_action_plan_markdown(plan)
 
+        self.assertIn("Estado operativo: BLOQUEADO_POR_ITEMS_ALTA", md)
+        self.assertIn("Siguiente accion: Solicitar primero al promotor", md)
         self.assertIn("## Ruta recomendada de cierre", md)
         self.assertIn("Solicitar al promotor los 2 item(s) de criticidad ALTA", md)
         self.assertIn("Resolver las 1 accion(es) tecnicas ALTA", md)

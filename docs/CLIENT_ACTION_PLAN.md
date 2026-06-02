@@ -31,6 +31,9 @@ regeneracion del Documento Ambiental, paquete documental y auditoria final.
 El JSON expone esa misma ruta en `closing_route`, con `order`, `title`,
 `audience`, `priority` y `action_refs`, para que una UI pueda mostrarla sin
 parsear el Markdown.
+Tambien incluye `executive_summary`, pensado para cabecera de panel o informe
+ejecutivo: estado operativo, lectura breve, siguiente accion, conteo de items
+ALTA y `administrative_ready=false`.
 
 ## Reglas
 
