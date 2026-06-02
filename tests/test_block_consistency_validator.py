@@ -229,12 +229,12 @@ class TestLoadMarkdownBlocks(unittest.TestCase):
         blocks = load_markdown_blocks(exp)
         self.assertIn("impactos/valoracion.md", blocks)
 
-    def test_carga_auditoria_dir(self):
+    def test_no_carga_auditoria_dir(self):
         exp = self._make_exp()
         (exp / "auditoria").mkdir()
         (exp / "auditoria" / "art45.md").write_text("Checklist art45", encoding="utf-8")
         blocks = load_markdown_blocks(exp)
-        self.assertIn("auditoria/art45.md", blocks)
+        self.assertNotIn("auditoria/art45.md", blocks)
 
     def test_no_carga_json(self):
         exp = self._make_exp()
@@ -916,6 +916,20 @@ class TestValidateBlockConsistencyFromFiles(unittest.TestCase):
         exp = self._make_exp()
         result = validate_block_consistency_from_files(exp)
         self.assertEqual(result.status, "SIN_DATOS")
+
+    def test_auditoria_markdowns_no_generan_autoincidencias(self):
+        exp = self._make_exp()
+        (exp / "auditoria").mkdir()
+        (exp / "auditoria" / "block_consistency_result.md").write_text(
+            "diagnostica reductora correctora ambiental prl_no_eia.",
+            encoding="utf-8",
+        )
+        (exp / "bloques" / "bloque_A.md").write_text("Identificacion.", encoding="utf-8")
+
+        result = validate_block_consistency_from_files(exp)
+
+        self.assertEqual(result.error_count(), 0)
+        self.assertNotIn("auditoria/block_consistency_result.md", result.checked_blocks)
 
 
 # ---------------------------------------------------------------------------

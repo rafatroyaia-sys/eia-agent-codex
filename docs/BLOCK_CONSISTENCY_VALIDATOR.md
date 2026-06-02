@@ -43,7 +43,7 @@ los bloques A-K de forma mas profunda. RD-04 opera como validador previo, offlin
 | `I_CONCLUSIONES` | Conclusiones tecncias | `bloque_I_conclusiones.md` |
 | `J_RNT` | Resumen No Tecnico | `bloque_J_rnt.md` |
 | `K_ANEXOS` | Anejos y anexos | `anejo_*.md` |
-| `GENERICO` | Otros archivos | `auditoria/*.md` |
+| `GENERICO` | Otros archivos tecnicos | markdowns no clasificados dentro de bloques/inventario/impactos |
 
 ---
 
@@ -165,6 +165,10 @@ python run_expediente.py <expediente> audit-block-consistency [--write]
 - Ademas, escribe:
   - `auditoria/block_consistency_result.json`
   - `auditoria/block_consistency_result.md`
+
+Los informes `auditoria/*.md` generados no se escanean como bloques del
+Documento Ambiental, para evitar que el validador se autogenere incoherencias
+citando sus propias incidencias.
 
 **No modifica** los bloques del expediente.
 

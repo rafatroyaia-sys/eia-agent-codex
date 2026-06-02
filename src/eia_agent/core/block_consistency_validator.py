@@ -438,14 +438,16 @@ def detect_block_family(path_or_name: str) -> str:
 def load_markdown_blocks(expediente_path: str | Path) -> dict[str, str]:
     """Carga todos los markdowns relevantes del expediente.
 
-    Busca en: bloques/, inventario/, impactos/, auditoria/.
-    No busca en: docs/, prompts/, tests/ del proyecto.
+    Busca en: bloques/, inventario/, impactos/.
+    No busca en: docs/, prompts/, auditoria/, tests/ del proyecto.
+    Los informes de auditoria no se tratan como bloques del Documento
+    Ambiental para evitar autoincidencias.
 
     Devuelve dict con clave=ruta relativa, valor=texto.
     Si no hay markdowns, devuelve dict vacio.
     """
     p = Path(expediente_path)
-    SCAN_DIRS = ("bloques", "inventario", "impactos", "auditoria")
+    SCAN_DIRS = ("bloques", "inventario", "impactos")
     blocks: dict[str, str] = {}
 
     for subdir in SCAN_DIRS:
