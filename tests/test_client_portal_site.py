@@ -58,7 +58,7 @@ class TestClientPortalSite(unittest.TestCase):
         html = build_client_portal_html(portal)
 
         self.assertIn("<!doctype html>", html)
-        self.assertIn("Portal cliente", html)
+        self.assertIn("App de expediente ambiental", html)
         self.assertIn("Entrada cliente", html)
         self.assertIn("Siguientes pasos", html)
         self.assertIn("Artefactos", html)
@@ -82,7 +82,7 @@ class TestClientPortalSite(unittest.TestCase):
 
         self.assertTrue(html_path.exists())
         self.assertEqual(html_path.name, "index.html")
-        self.assertIn("Portal cliente", html_path.read_text(encoding="utf-8"))
+        self.assertIn("App de expediente ambiental", html_path.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

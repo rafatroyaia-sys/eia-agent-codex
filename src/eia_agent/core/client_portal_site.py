@@ -19,8 +19,8 @@ CLIENT_PORTAL_SITE_DIR = "portal_cliente"
 CLIENT_PORTAL_SITE_HTML = "index.html"
 
 DISCLAIMER = (
-    "Este portal no declara el expediente apto para presentacion administrativa. "
-    "Solo organiza el flujo cliente y los outputs existentes."
+    "Esta app no declara por si sola el expediente apto para presentacion administrativa. "
+    "Organiza el flujo cliente, los inputs, los faltantes y los outputs disponibles."
 )
 
 
@@ -119,7 +119,7 @@ def build_client_portal_html(portal: ClientPortal) -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Portal cliente - {_text(portal.expediente_id)}</title>
+  <title>EIA-Agent - App cliente - {_text(portal.expediente_id)}</title>
   <style>
     :root {{
       --bg: #f4f6f8;
@@ -313,7 +313,7 @@ def build_client_portal_html(portal: ClientPortal) -> str:
 </head>
 <body>
   <header>
-    <h1>Portal cliente</h1>
+    <h1>EIA-Agent | App de expediente ambiental</h1>
     <p>{_text(portal.expediente_id)}</p>
   </header>
   <main>

@@ -18,7 +18,8 @@ Proporciona acceso desde consola a los módulos de productización:
   document-prepare-presentation, audit-positive-gaps,
   document-structure, document-numbering, document-toc, cliente-intake,
   cliente-form-schema, cliente-submission-check, cliente-plan,
-  cliente-dashboard, cliente-portal, cliente-portal-site, cliente-trial-package.
+  cliente-dashboard, cliente-portal, cliente-portal-site, cliente-trial-package,
+  cliente-app-package.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -57,6 +58,7 @@ Uso:
     python run_expediente.py <expediente> cliente-portal [--write]
     python run_expediente.py <expediente> cliente-portal-site [--write]
     python run_expediente.py <expediente> cliente-trial-package [--write]
+    python run_expediente.py <expediente> cliente-app-package [--write]
 """
 import argparse
 import sys
@@ -2085,6 +2087,25 @@ def cmd_cliente_trial_package(exp_path: Path, write: bool) -> int:
     return 0
 
 
+def cmd_cliente_app_package(exp_path: Path, write: bool) -> int:
+    """App profesional cliente: HTML, contratos, documentos, mapas y ZIP."""
+    from eia_agent.core.client_app_package import build_client_app_package
+
+    try:
+        result = build_client_app_package(exp_path, write_outputs=write)
+    except Exception as exc:
+        print(f"Error generando app profesional cliente: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+    if write:
+        print("\nApp profesional cliente:")
+        print(f"  {result.app_dir}")
+        print(f"  {result.zip_path}")
+
+    return 0
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -2970,6 +2991,19 @@ Ejemplos:
         help="Escribir documento/cliente_trial_package/ y .zip.",
     )
 
+    app_package_p = sub.add_parser(
+        "cliente-app-package",
+        help=(
+            "Generar app profesional cliente con HTML, contratos, documentos, "
+            "mapas/clima disponibles y ZIP entregable. No declara aptitud."
+        ),
+    )
+    app_package_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir documento/cliente_app/ y eia_agent_cliente_app.zip.",
+    )
+
     return parser
 
 
@@ -3124,6 +3158,8 @@ def main(argv=None) -> int:
         return cmd_cliente_portal_site(exp_path, args.write)
     if args.command == "cliente-trial-package":
         return cmd_cliente_trial_package(exp_path, args.write)
+    if args.command == "cliente-app-package":
+        return cmd_cliente_app_package(exp_path, args.write)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()
