@@ -16,7 +16,7 @@ Proporciona acceso desde consola a los módulos de productización:
   document-manifest, document-build-md, document-build-docx,
   document-insert-figures, document-qc, document-package, document-export,
   document-prepare-presentation, audit-positive-gaps,
-  document-structure, document-numbering, document-toc, cliente-plan.
+  document-structure, document-numbering, document-toc, cliente-plan, cliente-dashboard.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -48,6 +48,7 @@ Uso:
     python run_expediente.py <expediente> audit-positive-gaps [--write]
     python run_expediente.py <expediente> document-toc [--write] [--apply] [--no-replace]
     python run_expediente.py <expediente> cliente-plan [--write]
+    python run_expediente.py <expediente> cliente-dashboard [--write]
 """
 import argparse
 import sys
@@ -1911,6 +1912,30 @@ def cmd_cliente_plan(exp_path: Path, write: bool) -> int:
     return 0 if not result.warnings else 1
 
 
+def cmd_cliente_dashboard(exp_path: Path, write: bool) -> int:
+    """Dashboard cliente: resumen UI/API del expediente."""
+    from eia_agent.core.client_dashboard import (
+        build_client_dashboard,
+        write_client_dashboard_outputs,
+    )
+
+    try:
+        result = build_client_dashboard(exp_path)
+    except Exception as exc:
+        print(f"Error generando dashboard cliente: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        json_path, md_path = write_client_dashboard_outputs(result, exp_path)
+        print("\nDashboard cliente:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0 if not result.warnings else 1
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -2705,6 +2730,19 @@ Ejemplos:
         help="Escribir documento/plan_accion_cliente.json y .md.",
     )
 
+    dash_p = sub.add_parser(
+        "cliente-dashboard",
+        help=(
+            "Generar dashboard cliente para UI/API: estado ejecutivo, indicadores, "
+            "ruta de cierre y artefactos disponibles. No declara aptitud."
+        ),
+    )
+    dash_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir documento/cliente_dashboard.json y .md.",
+    )
+
     return parser
 
 
@@ -2845,6 +2883,8 @@ def main(argv=None) -> int:
         return cmd_cliente_da(exp_path, args.write, getattr(args, "prod", False))
     if args.command == "cliente-plan":
         return cmd_cliente_plan(exp_path, args.write)
+    if args.command == "cliente-dashboard":
+        return cmd_cliente_dashboard(exp_path, args.write)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()
