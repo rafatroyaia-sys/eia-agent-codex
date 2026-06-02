@@ -257,6 +257,74 @@ def _dedupe_items(items: list[ClientActionItem]) -> list[ClientActionItem]:
     return result
 
 
+def _group_recommendation(source: str, source_items: list[ClientActionItem]) -> str:
+    """Construye una recomendacion ejecutiva para incidencias agrupadas."""
+    if not source_items:
+        return ""
+
+    messages = " ".join([
+        " ".join([i.reason, i.recommendation, i.reference]).lower()
+        for i in source_items
+    ])
+
+    if source == "RD-04_BLOCK_CONSISTENCY":
+        advice: list[str] = []
+        if any(t in messages for t in ("diagnostica", "estudio acustico", "medicion acustica")):
+            advice.append(
+                "Medidas diagnosticas: sustituir cualquier redaccion que las presente "
+                "como reductoras por una formulacion de condicion previa/verificacion. "
+                "Ejemplo seguro: 'El estudio acustico no reduce por si solo la "
+                "significancia; dimensiona y verifica medidas materiales como "
+                "insonorizacion, encapsulamiento o limitacion horaria'."
+            )
+        if any(t in messages for t in ("prl", "epi", "proteccion auditiva", "auricular")):
+            advice.append(
+                "PRL/EPI: separar la proteccion de trabajadores de las medidas "
+                "ambientales exteriores. Los EPI no computan como medida correctora "
+                "del impacto ambiental."
+            )
+        if any(t in messages for t in ("red natura", "zepa", "zec", "lic")):
+            advice.append(
+                "Red Natura/ENP: mantener la misma conclusion y cautelas en inventario, "
+                "impactos, medidas, PVA y conclusiones, diferenciando dato consultado "
+                "de interpretacion tecnica."
+            )
+        if any(t in messages for t in ("patrimonio", "arqueolog")):
+            advice.append(
+                "Patrimonio: alinear inventario, impacto, medida documental y PVA; si "
+                "falta consulta oficial, dejar el impacto condicionado o pendiente."
+            )
+        if not advice:
+            advice.append(
+                "Revisar bloque por bloque la misma afirmacion tecnica y mantener "
+                "identico alcance, cautelas, estado de evidencia y medidas asociadas."
+            )
+        return " ".join(advice)
+
+    if source == "AU-03_TRACEABILITY":
+        return (
+            "Anadir o corregir referencias cruzadas entre hechos, impactos, medidas, "
+            "PVA y anexos. Cada afirmacion relevante debe poder rastrearse hasta una "
+            "fuente, ficha o output tecnico."
+        )
+
+    if source == "AU-02_PRUDENCE":
+        return (
+            "Sustituir afirmaciones absolutas por lenguaje prudente y trazable: "
+            "'no se detecta en las fuentes consultadas', 'segun la documentacion "
+            "analizada' o 'pendiente de prospeccion/consulta'."
+        )
+
+    if source == "RD-09_PRL_MEASURES":
+        return (
+            "Separar las medidas PRL de las medidas ambientales. Si un impacto "
+            "ambiental necesita reduccion, debe existir una medida preventiva, "
+            "correctora o protectora EIA independiente."
+        )
+
+    return source_items[0].recommendation
+
+
 def _group_technical_actions(items: list[ClientActionItem]) -> list[ClientActionItem]:
     """Agrupa auditorias internas repetitivas para que el plan sea usable."""
     grouped_sources = {
@@ -293,7 +361,7 @@ def _group_technical_actions(items: list[ClientActionItem]) -> list[ClientAction
             expected_format="Correccion interna del expediente, regeneracion de outputs y nueva auditoria.",
             source=source,
             reference=source,
-            recommendation=source_items[0].recommendation if source_items else "",
+            recommendation=_group_recommendation(source, source_items),
         ))
 
     result.sort(key=lambda i: (-priority_rank.get(i.priority, 0), i.source, i.title))

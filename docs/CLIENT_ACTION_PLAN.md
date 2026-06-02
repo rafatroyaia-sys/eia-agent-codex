@@ -35,6 +35,10 @@ Con `--write` genera:
   promotor cuando faltan alternativas o cartografia suficiente.
 - Las incidencias de lenguaje prudente y coherencia documental se tratan como
   acciones internas del equipo tecnico.
+- Las incidencias internas repetitivas se agrupan por fuente de auditoria para
+  que el plan sea accionable. En especial, `RD-04_BLOCK_CONSISTENCY` genera
+  recomendaciones de redaccion segura para medidas diagnosticas, PRL/EPI,
+  Red Natura/ENP y patrimonio, segun los patrones detectados.
 
 ## Uso
 

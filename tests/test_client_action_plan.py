@@ -109,6 +109,40 @@ class TestClientActionPlan(unittest.TestCase):
         self.assertEqual(len(prudence), 1)
         self.assertIn("2 incidencia", prudence[0].reason)
 
+    def test_rd04_group_adds_specific_diagnostic_measure_guidance(self):
+        _write_json(self.exp / "auditoria" / "final_audit_result.json", {
+            "issues": [
+                {
+                    "severity": "ALTA",
+                    "source": "RD-04_BLOCK_CONSISTENCY",
+                    "code": "BC-MEA-001",
+                    "message": (
+                        "D_medidas presenta estudio acustico diagnostica como "
+                        "reductora de impacto."
+                    ),
+                    "recommendation": "Separar diagnosticas de correctoras.",
+                    "related_file": "bloques/D_medidas.md",
+                },
+                {
+                    "severity": "ALTA",
+                    "source": "RD-04_BLOCK_CONSISTENCY",
+                    "code": "BC-MEA-002",
+                    "message": "AG09_medidas presenta EPI/PRL como correctora ambiental.",
+                    "recommendation": "Separar PRL de medidas ambientales.",
+                    "related_file": "impactos/AG09_medidas.md",
+                },
+            ],
+        })
+
+        plan = build_client_action_plan(self.exp)
+        rd04 = [i for i in plan.technical_actions if i.source == "RD-04_BLOCK_CONSISTENCY"]
+
+        self.assertEqual(len(rd04), 1)
+        self.assertIn("2 incidencia", rd04[0].reason)
+        self.assertIn("estudio acustico no reduce", rd04[0].recommendation.lower())
+        self.assertIn("epi no computan", rd04[0].recommendation.lower())
+        self.assertIn("bloques/D_medidas.md", rd04[0].reason)
+
     def test_plan_never_sets_administrative_ready(self):
         self._write_audit()
         plan = build_client_action_plan(self.exp)
