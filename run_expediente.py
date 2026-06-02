@@ -17,7 +17,8 @@ Proporciona acceso desde consola a los módulos de productización:
   document-insert-figures, document-qc, document-package, document-export,
   document-prepare-presentation, audit-positive-gaps,
   document-structure, document-numbering, document-toc, cliente-intake,
-  cliente-plan, cliente-dashboard, cliente-portal, cliente-portal-site.
+  cliente-form-schema, cliente-plan, cliente-dashboard, cliente-portal,
+  cliente-portal-site.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -49,6 +50,7 @@ Uso:
     python run_expediente.py <expediente> audit-positive-gaps [--write]
     python run_expediente.py <expediente> document-toc [--write] [--apply] [--no-replace]
     python run_expediente.py <expediente> cliente-intake [--write]
+    python run_expediente.py <expediente> cliente-form-schema [--write]
     python run_expediente.py <expediente> cliente-plan [--write]
     python run_expediente.py <expediente> cliente-dashboard [--write]
     python run_expediente.py <expediente> cliente-portal [--write]
@@ -1964,6 +1966,30 @@ def cmd_cliente_dashboard(exp_path: Path, write: bool) -> int:
     return 0 if not result.warnings else 1
 
 
+def cmd_cliente_form_schema(exp_path: Path, write: bool) -> int:
+    """Form schema cliente: controles y validaciones minimas para UI/API."""
+    from eia_agent.core.client_form_schema import (
+        build_client_form_schema,
+        write_client_form_schema_outputs,
+    )
+
+    try:
+        result = build_client_form_schema(exp_path)
+    except Exception as exc:
+        print(f"Error generando form schema cliente: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        json_path, md_path = write_client_form_schema_outputs(result, exp_path)
+        print("\nForm schema cliente:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0
+
+
 def cmd_cliente_portal(exp_path: Path, write: bool) -> int:
     """Portal cliente: paquete unico intake + dashboard + siguientes pasos."""
     from eia_agent.core.client_portal import (
@@ -2821,6 +2847,19 @@ Ejemplos:
         help="Escribir documento/cliente_intake.json y .md.",
     )
 
+    form_schema_p = sub.add_parser(
+        "cliente-form-schema",
+        help=(
+            "Generar esquema de formulario para UI/API cliente: controles, "
+            "validaciones minimas y formatos aceptados. No declara aptitud."
+        ),
+    )
+    form_schema_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir documento/cliente_form_schema.json y .md.",
+    )
+
     dash_p = sub.add_parser(
         "cliente-dashboard",
         help=(
@@ -3002,6 +3041,8 @@ def main(argv=None) -> int:
         return cmd_cliente_plan(exp_path, args.write)
     if args.command == "cliente-intake":
         return cmd_cliente_intake(exp_path, args.write)
+    if args.command == "cliente-form-schema":
+        return cmd_cliente_form_schema(exp_path, args.write)
     if args.command == "cliente-dashboard":
         return cmd_cliente_dashboard(exp_path, args.write)
     if args.command == "cliente-portal":
