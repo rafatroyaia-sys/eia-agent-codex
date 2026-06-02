@@ -179,6 +179,17 @@ class TestClientActionPlan(unittest.TestCase):
         self.assertIn("Borrador de correo", md)
         self.assertIn("Solicitud de informacion tecnica", md)
 
+    def test_markdown_contains_ordered_closing_route(self):
+        self._write_audit()
+        plan = build_client_action_plan(self.exp)
+        md = build_client_action_plan_markdown(plan)
+
+        self.assertIn("## Ruta recomendada de cierre", md)
+        self.assertIn("Solicitar al promotor los 2 item(s) de criticidad ALTA", md)
+        self.assertIn("Resolver las 1 accion(es) tecnicas ALTA", md)
+        self.assertIn("Regenerar Documento Ambiental", md)
+        self.assertIn("no sustituye firma ni validacion juridica", md)
+
     def test_write_outputs_creates_json_and_markdown(self):
         self._write_audit()
         plan = build_client_action_plan(self.exp)

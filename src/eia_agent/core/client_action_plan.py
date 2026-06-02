@@ -444,6 +444,8 @@ def build_client_action_plan_markdown(plan: ClientActionPlan) -> str:
     lines.append("- administrative_ready: false")
     lines.append("")
 
+    lines.extend(_render_closing_route(plan))
+
     lines.append("## Para pedir al promotor")
     lines.append("")
     if plan.promoter_requests:
@@ -516,6 +518,50 @@ def build_client_action_plan_markdown(plan: ClientActionPlan) -> str:
     lines.append("")
     lines.append(f"*{DISCLAIMER}*")
     return "\n".join(lines)
+
+
+def _render_closing_route(plan: ClientActionPlan) -> list[str]:
+    """Renderiza una ruta corta y ordenada para cerrar el expediente."""
+    promoter_high = [i for i in plan.promoter_requests if i.priority == "ALTA"]
+    technical_high = [i for i in plan.technical_actions if i.priority == "ALTA"]
+    promoter_rest = [i for i in plan.promoter_requests if i.priority != "ALTA"]
+    technical_rest = [i for i in plan.technical_actions if i.priority != "ALTA"]
+
+    lines: list[str] = []
+    lines.append("## Ruta recomendada de cierre")
+    lines.append("")
+
+    if not any([promoter_high, technical_high, promoter_rest, technical_rest]):
+        lines.append(
+            "1. Ejecutar de nuevo las auditorias cuando existan outputs del expediente."
+        )
+        lines.append("")
+        return lines
+
+    step = 1
+    if promoter_high:
+        lines.append(
+            f"{step}. Solicitar al promotor los {len(promoter_high)} item(s) de criticidad ALTA."
+        )
+        step += 1
+    if technical_high:
+        lines.append(
+            f"{step}. Resolver las {len(technical_high)} accion(es) tecnicas ALTA antes de regenerar el documento."
+        )
+        step += 1
+    if promoter_rest or technical_rest:
+        lines.append(
+            f"{step}. Cerrar los pendientes MEDIA/BAJA que condicionan calidad, firma o trazabilidad."
+        )
+        step += 1
+    lines.append(
+        f"{step}. Regenerar Documento Ambiental, paquete documental, plan de accion y auditoria final."
+    )
+    lines.append(
+        f"{step + 1}. Revisar tecnicamente el resultado; este plan no sustituye firma ni validacion juridica."
+    )
+    lines.append("")
+    return lines
 
 
 def write_client_action_plan_outputs(

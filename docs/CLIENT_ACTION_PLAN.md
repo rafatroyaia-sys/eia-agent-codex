@@ -25,6 +25,10 @@ Con `--write` genera:
 - `documento/plan_accion_cliente.json`
 - `documento/plan_accion_cliente.md`
 
+El Markdown incluye una ruta recomendada de cierre, separando primero los items
+ALTA del promotor, despues las acciones tecnicas ALTA, y finalmente la
+regeneracion del Documento Ambiental, paquete documental y auditoria final.
+
 ## Reglas
 
 - No declara aptitud administrativa.
