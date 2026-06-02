@@ -32,6 +32,7 @@ DOCX_BUILD_RESULT_FILENAME = "docx_build_result.json"
 
 DEFAULT_TITLE = "Documento Ambiental"
 DEFAULT_SUBTITLE = "Borrador tecnico generado automaticamente"
+ADMIN_STYLE_PROFILE = "recimetal_admin_reference_v1"
 
 SUPPORTED_MARKDOWN_ELEMENTS: list[str] = [
     "heading",
@@ -49,6 +50,11 @@ _ADMIN_DISCLAIMER = (
     "Documento generado automaticamente a partir de outputs tecnicos. "
     "Requiere revision tecnica/juridica. "
     "No declara aptitud administrativa."
+)
+
+_ADMIN_STYLE_NOTE = (
+    "Perfil formal basado en referencia administrativa RECIMETAL: portada sobria, "
+    "Calibri Light 12, jerarquia compacta, indice y tablas con cuadricula."
 )
 
 # ---------------------------------------------------------------------------
@@ -316,62 +322,74 @@ def create_docx_document(
 ) -> "docx.Document":
     """Crea un Document() de python-docx con estilos y margenes configurados."""
     from docx import Document
+    from docx.enum.text import WD_LINE_SPACING
+    from docx.oxml.ns import qn
     from docx.shared import Cm, Pt, RGBColor
 
     doc = Document()
 
-    # Margenes
+    # Margenes inspirados en la referencia administrativa aportada.
     for section in doc.sections:
-        section.top_margin = Cm(2.5)
-        section.bottom_margin = Cm(2.5)
-        section.left_margin = Cm(3.0)
-        section.right_margin = Cm(2.0)
+        section.top_margin = Cm(2.2)
+        section.bottom_margin = Cm(2.0)
+        section.left_margin = Cm(2.5)
+        section.right_margin = Cm(2.3)
+        section.header_distance = Cm(1.0)
+        section.footer_distance = Cm(1.0)
+
+    def _set_font(style_name: str, name: str, size_pt: float, bold=None, italic=None, color=None) -> None:
+        try:
+            style = doc.styles[style_name]
+            style.font.name = name
+            style.font.size = Pt(size_pt)
+            if bold is not None:
+                style.font.bold = bold
+            if italic is not None:
+                style.font.italic = italic
+            if color is not None:
+                style.font.color.rgb = RGBColor(*color)
+            rpr = style.element.get_or_add_rPr()
+            rfonts = rpr.rFonts
+            if rfonts is not None:
+                rfonts.set(qn("w:ascii"), name)
+                rfonts.set(qn("w:hAnsi"), name)
+                rfonts.set(qn("w:cs"), name)
+        except Exception:
+            pass
+
+    def _set_para_spacing(style_name: str, before: float, after: float, line: float = 1.08) -> None:
+        try:
+            pf = doc.styles[style_name].paragraph_format
+            pf.space_before = Pt(before)
+            pf.space_after = Pt(after)
+            pf.line_spacing = line
+            pf.line_spacing_rule = WD_LINE_SPACING.MULTIPLE
+        except Exception:
+            pass
 
     # Estilo Normal
-    try:
-        normal = doc.styles["Normal"]
-        normal.font.name = "Calibri"
-        normal.font.size = Pt(11)
-    except Exception:
-        pass
+    _set_font("Normal", "Calibri Light", 12)
+    _set_para_spacing("Normal", 0, 6)
 
     # Heading 1
-    try:
-        h1 = doc.styles["Heading 1"]
-        h1.font.name = "Calibri"
-        h1.font.size = Pt(16)
-        h1.font.bold = True
-        h1.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
-    except Exception:
-        pass
+    _set_font("Heading 1", "Calibri Light", 15, bold=True, color=(0x20, 0x20, 0x20))
+    _set_para_spacing("Heading 1", 14, 6)
 
     # Heading 2
-    try:
-        h2 = doc.styles["Heading 2"]
-        h2.font.name = "Calibri"
-        h2.font.size = Pt(14)
-        h2.font.bold = True
-        h2.font.color.rgb = RGBColor(0x2E, 0x75, 0xB6)
-    except Exception:
-        pass
+    _set_font("Heading 2", "Calibri Light", 13, bold=True, color=(0x25, 0x25, 0x25))
+    _set_para_spacing("Heading 2", 10, 4)
 
     # Heading 3
-    try:
-        h3 = doc.styles["Heading 3"]
-        h3.font.name = "Calibri"
-        h3.font.size = Pt(12)
-        h3.font.bold = True
-    except Exception:
-        pass
+    _set_font("Heading 3", "Calibri Light", 12, bold=True, color=(0x30, 0x30, 0x30))
+    _set_para_spacing("Heading 3", 8, 3)
 
     # Heading 4
-    try:
-        h4 = doc.styles["Heading 4"]
-        h4.font.name = "Calibri"
-        h4.font.size = Pt(11)
-        h4.font.bold = True
-    except Exception:
-        pass
+    _set_font("Heading 4", "Calibri Light", 11, bold=True, italic=True, color=(0x40, 0x40, 0x40))
+    _set_para_spacing("Heading 4", 6, 2)
+
+    _set_font("Caption", "Calibri Light", 9, bold=True, color=(0x40, 0x40, 0x40))
+    _set_font("Header", "Calibri Light", 9, color=(0x70, 0x70, 0x70))
+    _set_font("Footer", "Calibri Light", 9, color=(0x70, 0x70, 0x70))
 
     return doc
 
@@ -404,21 +422,29 @@ def add_cover_page(
                 pass
 
     # Titulo principal
+    for _ in range(3):
+        doc.add_paragraph()
+
     title_para = doc.add_paragraph()
     title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    title_run = title_para.add_run(title)
+    title_para.paragraph_format.space_after = Pt(2)
+    title_run = title_para.add_run(title.upper())
     title_run.bold = True
-    title_run.font.size = Pt(22)
+    title_run.font.name = "Calibri Light"
+    title_run.font.size = Pt(20)
     try:
-        title_run.font.color.rgb = RGBColor(0x1F, 0x49, 0x7D)
+        title_run.font.color.rgb = RGBColor(0x20, 0x20, 0x20)
     except Exception:
         pass
 
     # Subtitulo
     sub_para = doc.add_paragraph()
     sub_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    sub_run = sub_para.add_run(subtitle)
-    sub_run.font.size = Pt(14)
+    sub_para.paragraph_format.space_after = Pt(18)
+    sub_run = sub_para.add_run(subtitle.upper())
+    sub_run.font.name = "Calibri Light"
+    sub_run.font.size = Pt(15)
+    sub_run.bold = True
     try:
         sub_run.font.color.rgb = RGBColor(0x40, 0x40, 0x40)
     except Exception:
@@ -428,6 +454,7 @@ def add_cover_page(
     exp_para = doc.add_paragraph()
     exp_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     exp_run = exp_para.add_run(f"Expediente: {expediente_id}")
+    exp_run.font.name = "Calibri Light"
     exp_run.font.size = Pt(12)
 
     # Fecha de generacion
@@ -435,6 +462,7 @@ def add_cover_page(
     date_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     date_str = datetime.date.today().isoformat()
     date_run = date_para.add_run(f"Fecha de generacion: {date_str}")
+    date_run.font.name = "Calibri Light"
     date_run.font.size = Pt(10)
     try:
         date_run.font.color.rgb = RGBColor(0x60, 0x60, 0x60)
@@ -442,13 +470,15 @@ def add_cover_page(
         pass
 
     # Espacio
-    doc.add_paragraph()
+    for _ in range(2):
+        doc.add_paragraph()
 
     # Advertencia de alcance
     disc_para = doc.add_paragraph()
     disc_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
     disc_run = disc_para.add_run(generated_note)
     disc_run.italic = True
+    disc_run.font.name = "Calibri Light"
     disc_run.font.size = Pt(9)
     try:
         disc_run.font.color.rgb = RGBColor(0x80, 0x20, 0x20)
@@ -457,6 +487,49 @@ def add_cover_page(
 
     # Salto de pagina
     doc.add_page_break()
+
+
+def add_running_header_footer(doc: "docx.Document", expediente_id: str) -> None:
+    """Anade encabezado y pie discretos con paginacion de Word."""
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.shared import Pt, RGBColor
+
+    def _page_field(paragraph) -> None:
+        run = paragraph.add_run()
+        begin = OxmlElement("w:fldChar")
+        begin.set(qn("w:fldCharType"), "begin")
+        instr = OxmlElement("w:instrText")
+        instr.set(qn("xml:space"), "preserve")
+        instr.text = " PAGE "
+        separate = OxmlElement("w:fldChar")
+        separate.set(qn("w:fldCharType"), "separate")
+        end = OxmlElement("w:fldChar")
+        end.set(qn("w:fldCharType"), "end")
+        run._r.append(begin)
+        run._r.append(instr)
+        run._r.append(separate)
+        run._r.append(end)
+
+    for section in doc.sections:
+        header = section.header
+        footer = section.footer
+        hp = header.paragraphs[0] if header.paragraphs else header.add_paragraph()
+        hp.text = f"Documento Ambiental - {expediente_id}"
+        hp.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+        fp = footer.paragraphs[0] if footer.paragraphs else footer.add_paragraph()
+        fp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        fp.add_run("Pagina ")
+        _page_field(fp)
+        for para in [hp, fp]:
+            for run in para.runs:
+                run.font.name = "Calibri Light"
+                run.font.size = Pt(9)
+                try:
+                    run.font.color.rgb = RGBColor(0x70, 0x70, 0x70)
+                except Exception:
+                    pass
 
 
 def add_table_of_contents_placeholder(doc: "docx.Document") -> None:
@@ -523,6 +596,35 @@ def add_markdown_block_to_docx(doc: "docx.Document", block: dict) -> dict:
         "image_added": 0,
     }
     btype = block.get("type", "")
+
+    def _style_table_cell(cell, is_header: bool = False) -> None:
+        if is_header:
+            try:
+                tc_pr = cell._tc.get_or_add_tcPr()
+                shd = OxmlElement("w:shd")
+                shd.set(qn("w:fill"), "EDEDED")
+                tc_pr.append(shd)
+            except Exception:
+                pass
+        try:
+            tc_pr = cell._tc.get_or_add_tcPr()
+            margins = OxmlElement("w:tcMar")
+            for side in ["top", "left", "bottom", "right"]:
+                node = OxmlElement(f"w:{side}")
+                node.set(qn("w:w"), "90")
+                node.set(qn("w:type"), "dxa")
+                margins.append(node)
+            tc_pr.append(margins)
+        except Exception:
+            pass
+        for para in cell.paragraphs:
+            para.paragraph_format.space_before = Pt(0)
+            para.paragraph_format.space_after = Pt(0)
+            for r in para.runs:
+                r.font.name = "Calibri Light"
+                r.font.size = Pt(9)
+                if is_header:
+                    r.bold = True
 
     if btype == "heading":
         level = max(1, min(int(block.get("level", 1)), 4))
@@ -596,13 +698,7 @@ def add_markdown_block_to_docx(doc: "docx.Document", block: dict) -> dict:
                         clean = _strip_markdown_inline(str(cell_text))
                         cell.text = clean
                         # Cabecera en negrita (primera fila si hay headers)
-                        if row_idx == 0 and headers:
-                            try:
-                                for para in cell.paragraphs:
-                                    for r in para.runs:
-                                        r.bold = True
-                            except Exception:
-                                pass
+                        _style_table_cell(cell, is_header=bool(row_idx == 0 and headers))
             counts["table_added"] = 1
         except Exception:
             # Fallback: volcar tabla como parrafos
@@ -676,6 +772,7 @@ def build_docx_from_markdown(
     warnings: list[DocxBuildWarning] = []
 
     doc = create_docx_document(title=title, subtitle=subtitle)
+    add_running_header_footer(doc, expediente_id)
 
     add_cover_page(
         doc,
@@ -724,6 +821,7 @@ def build_docx_from_markdown(
         warnings=warnings,
         notes=[
             "DOCX generado a partir de borrador Markdown DOC-01.",
+            _ADMIN_STYLE_NOTE,
             "Requiere revision tecnica y juridica.",
             "No declara aptitud administrativa.",
         ],

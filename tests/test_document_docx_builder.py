@@ -25,6 +25,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from eia_agent.core.document_docx_builder import (
+    ADMIN_STYLE_PROFILE,
     DOCX_BUILD_RESULT_FILENAME,
     DOCX_OUTPUT_FILENAME,
     DEFAULT_SUBTITLE,
@@ -36,6 +37,7 @@ from eia_agent.core.document_docx_builder import (
     _strip_markdown_inline,
     add_cover_page,
     add_markdown_block_to_docx,
+    add_running_header_footer,
     add_table_of_contents_placeholder,
     build_docx_from_expediente,
     build_docx_from_markdown,
@@ -312,6 +314,20 @@ class TestCreateDocxDocument(unittest.TestCase):
         doc = create_docx_document()
         self.assertIsNotNone(doc.styles["Normal"])
 
+    def test_normal_style_uses_admin_reference_font(self):
+        doc = create_docx_document()
+        normal = doc.styles["Normal"]
+        self.assertEqual(normal.font.name, "Calibri Light")
+        self.assertEqual(normal.font.size.pt, 12)
+
+    def test_margins_follow_admin_reference_profile(self):
+        doc = create_docx_document()
+        section = doc.sections[0]
+        self.assertAlmostEqual(section.left_margin.cm, 2.5, places=1)
+        self.assertAlmostEqual(section.right_margin.cm, 2.3, places=1)
+        self.assertAlmostEqual(section.top_margin.cm, 2.2, places=1)
+        self.assertAlmostEqual(section.bottom_margin.cm, 2.0, places=1)
+
     def test_has_sections(self):
         doc = create_docx_document()
         self.assertGreater(len(doc.sections), 0)
@@ -334,7 +350,7 @@ class TestAddCoverPage(unittest.TestCase):
         doc = create_docx_document()
         add_cover_page(doc, "EXP-001", "Mi Titulo", "Mi Subtitulo", "Aviso")
         text = self._get_full_text(doc)
-        self.assertIn("Mi Titulo", text)
+        self.assertIn("MI TITULO", text)
 
     def test_cover_contains_expediente_id(self):
         doc = create_docx_document()
@@ -369,6 +385,21 @@ class TestAddCoverPage(unittest.TestCase):
         add_cover_page(doc, "EXP-001", DEFAULT_TITLE, DEFAULT_SUBTITLE, _ADMIN_DISCLAIMER)
         text = self._get_full_text(doc)
         self.assertIn("generacion", text.lower())
+
+
+class TestRunningHeaderFooter(unittest.TestCase):
+
+    def test_adds_expediente_header(self):
+        doc = create_docx_document()
+        add_running_header_footer(doc, "EXP-HEADER-001")
+        text = "\n".join(p.text for p in doc.sections[0].header.paragraphs)
+        self.assertIn("EXP-HEADER-001", text)
+
+    def test_adds_page_footer_label(self):
+        doc = create_docx_document()
+        add_running_header_footer(doc, "EXP-FOOTER-001")
+        text = "\n".join(p.text for p in doc.sections[0].footer.paragraphs)
+        self.assertIn("Pagina", text)
 
 
 # ---------------------------------------------------------------------------
@@ -819,6 +850,7 @@ class TestSeguridadMetodologica(unittest.TestCase):
     def test_constants_defined(self):
         self.assertEqual(DOCX_OUTPUT_FILENAME, "documento_ambiental_borrador.docx")
         self.assertEqual(DOCX_BUILD_RESULT_FILENAME, "docx_build_result.json")
+        self.assertEqual(ADMIN_STYLE_PROFILE, "recimetal_admin_reference_v1")
         self.assertIn("heading", SUPPORTED_MARKDOWN_ELEMENTS)
         self.assertIn("table", SUPPORTED_MARKDOWN_ELEMENTS)
         self.assertIn("blockquote", SUPPORTED_MARKDOWN_ELEMENTS)
