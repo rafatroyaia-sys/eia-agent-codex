@@ -17,7 +17,7 @@ Proporciona acceso desde consola a los módulos de productización:
   document-insert-figures, document-qc, document-package, document-export,
   document-prepare-presentation, audit-positive-gaps,
   document-structure, document-numbering, document-toc, cliente-intake,
-  cliente-plan, cliente-dashboard.
+  cliente-plan, cliente-dashboard, cliente-portal.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -51,6 +51,7 @@ Uso:
     python run_expediente.py <expediente> cliente-intake [--write]
     python run_expediente.py <expediente> cliente-plan [--write]
     python run_expediente.py <expediente> cliente-dashboard [--write]
+    python run_expediente.py <expediente> cliente-portal [--write]
 """
 import argparse
 import sys
@@ -1962,6 +1963,30 @@ def cmd_cliente_dashboard(exp_path: Path, write: bool) -> int:
     return 0 if not result.warnings else 1
 
 
+def cmd_cliente_portal(exp_path: Path, write: bool) -> int:
+    """Portal cliente: paquete unico intake + dashboard + siguientes pasos."""
+    from eia_agent.core.client_portal import (
+        build_client_portal,
+        write_client_portal_outputs,
+    )
+
+    try:
+        result = build_client_portal(exp_path)
+    except Exception as exc:
+        print(f"Error generando portal cliente: {exc}", file=sys.stderr)
+        return 1
+
+    print(result.summary())
+
+    if write:
+        json_path, md_path = write_client_portal_outputs(result, exp_path)
+        print("\nPortal cliente:")
+        print(f"  {json_path}")
+        print(f"  {md_path}")
+
+    return 0
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -2782,6 +2807,19 @@ Ejemplos:
         help="Escribir documento/cliente_dashboard.json y .md.",
     )
 
+    portal_p = sub.add_parser(
+        "cliente-portal",
+        help=(
+            "Generar paquete unico para UI/API cliente: intake, dashboard, "
+            "siguientes pasos y artefactos. No declara aptitud."
+        ),
+    )
+    portal_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir documento/cliente_portal.json y .md.",
+    )
+
     return parser
 
 
@@ -2926,6 +2964,8 @@ def main(argv=None) -> int:
         return cmd_cliente_intake(exp_path, args.write)
     if args.command == "cliente-dashboard":
         return cmd_cliente_dashboard(exp_path, args.write)
+    if args.command == "cliente-portal":
+        return cmd_cliente_portal(exp_path, args.write)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()
