@@ -26,6 +26,21 @@ Genera:
 - `documento/cliente_app/`
 - `documento/eia_agent_cliente_app.zip`
 
+## Entrega portatil para cliente
+
+El ZIP es portable para un equipo Windows:
+
+1. Descomprimir `eia_agent_cliente_app.zip`.
+2. Ejecutar `INICIAR_APP_WINDOWS.bat`.
+3. Usar la app en `http://127.0.0.1:8765/`.
+
+El paquete incluye:
+
+- `INICIAR_APP_WINDOWS.bat`: arranque por doble clic.
+- `server/eia_client_server.py`: servidor local autonomo sin dependencias externas.
+- `expedientes_cliente/`: carpeta que se crea para nuevos proyectos.
+- `DEPLOY_PROVISIONAL.md`: guia de uso local y despliegue provisional.
+
 ## Backend local
 
 Para usar la app como herramienta de trabajo con alta real de expedientes:
@@ -54,6 +69,9 @@ No ejecuta automaticamente la presentacion administrativa ni declara aptitud.
 
 - `index.html`: app cliente autocontenida.
 - `nuevo_expediente.html`: mesa de entrada para expedientes nuevos.
+- `INICIAR_APP_WINDOWS.bat`: arranque portatil Windows.
+- `server/eia_client_server.py`: backend portatil incluido en el ZIP.
+- `DEPLOY_PROVISIONAL.md`: instrucciones de uso/deploy para cliente.
 - `README_CLIENTE.md`: guia profesional de uso.
 - `data/app_manifest.json`: flujo funcional, inputs y outputs esperados.
 - `data/new_project_blueprint.json`: contrato para alta de nuevos proyectos.

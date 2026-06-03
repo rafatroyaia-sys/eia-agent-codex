@@ -221,6 +221,268 @@ def _write_json(path: Path, data: dict[str, Any]) -> None:
     _write_text(path, json.dumps(data, ensure_ascii=False, indent=2))
 
 
+def _portable_server_script() -> str:
+    return r'''"""
+Servidor portatil EIA-Agent Cliente.
+
+Uso:
+  python server/eia_client_server.py
+
+No genera por si solo aptitud administrativa.
+"""
+from __future__ import annotations
+
+import cgi
+import json
+import mimetypes
+import re
+from http import HTTPStatus
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+from pathlib import Path
+from urllib.parse import unquote, urlparse
+
+
+ROOT = Path(__file__).resolve().parents[1]
+PROJECTS = ROOT / "expedientes_cliente"
+HOST = "127.0.0.1"
+PORT = 8765
+DISCLAIMER = "La app prepara expedientes y entradas documentales. No declara aptitud administrativa."
+
+DIRS = [
+    "inputs",
+    "inputs/memoria_tecnica",
+    "inputs/memoria_explotacion",
+    "inputs/fotos",
+    "inputs/imagenes",
+    "inputs/cartografia_aportada",
+    "control_interno",
+    "documento",
+    "cartografia",
+    "cartografia/mapas",
+    "clima",
+    "auditoria",
+]
+
+UPLOAD_TARGETS = {
+    "DOC-001": "inputs/memoria_tecnica",
+    "DOC-002": "inputs/memoria_explotacion",
+    "DOC-003": "inputs/imagenes",
+    "DOC-004": "inputs/cartografia_aportada",
+    "DOC-005": "inputs/fotos",
+    "DOC-006": "inputs/imagenes",
+    "MEDIA-001": "inputs/fotos",
+    "CART-001": "inputs/cartografia_aportada",
+}
+
+
+def sanitize(value: str) -> str:
+    value = re.sub(r"[\s/\\:;,.]+", "-", value or "")
+    value = re.sub(r"[^A-Za-z0-9_-]", "", value)
+    value = re.sub(r"-{2,}", "-", value).strip("-_").upper()
+    return value or "NUEVO-EXPEDIENTE"
+
+
+def safe_filename(value: str) -> str:
+    name = Path(value or "archivo").name
+    name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._")
+    return name or "archivo"
+
+
+def project_name(payload: dict) -> str:
+    project = payload.get("project") if isinstance(payload, dict) else {}
+    if isinstance(project, dict):
+        return str(project.get("project_name") or "nuevo expediente")
+    return "nuevo expediente"
+
+
+def create_project(payload: dict) -> dict:
+    pid = sanitize(project_name(payload))
+    if not pid.startswith("EXP-"):
+        pid = f"EXP-{pid}"
+    exp = PROJECTS / pid
+    for rel in DIRS:
+        (exp / rel).mkdir(parents=True, exist_ok=True)
+    entry = dict(payload)
+    entry["backend"] = {
+        "project_id": pid,
+        "project_name": project_name(payload),
+        "administrative_ready": False,
+        "disclaimer": DISCLAIMER,
+    }
+    (exp / "control_interno" / "entrada_cliente.json").write_text(
+        json.dumps(entry, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    (exp / "README_EXPEDIENTE.md").write_text(
+        f"# {pid}\n\nExpediente creado desde EIA-Agent Cliente portatil.\n\nadministrative_ready: false\n",
+        encoding="utf-8",
+    )
+    return {
+        "project_id": pid,
+        "project_name": project_name(payload),
+        "expediente_path": str(exp),
+        "status": "PROJECT_CREATED",
+        "administrative_ready": False,
+        "disclaimer": DISCLAIMER,
+    }
+
+
+def upload_file(project_id: str, control_id: str, filename: str, content: bytes, content_type: str) -> dict:
+    exp = PROJECTS / sanitize(project_id)
+    if not exp.exists():
+        raise FileNotFoundError(f"Proyecto no encontrado: {project_id}")
+    target_dir = exp / UPLOAD_TARGETS.get(control_id, "inputs/otros")
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / safe_filename(filename)
+    if target.exists():
+        counter = 2
+        while target.exists():
+            target = target_dir / f"{target.stem}_{counter}{target.suffix}"
+            counter += 1
+    target.write_bytes(content)
+    item = {
+        "control_id": control_id,
+        "original_name": filename,
+        "stored_path": str(target.relative_to(exp)).replace("\\", "/"),
+        "size_bytes": len(content),
+        "content_type": content_type,
+    }
+    index_path = exp / "control_interno" / "inventario_archivos_cliente.json"
+    files = []
+    if index_path.exists():
+        try:
+            files = json.loads(index_path.read_text(encoding="utf-8")).get("files", [])
+        except Exception:
+            files = []
+    files.append(item)
+    index_path.write_text(
+        json.dumps({"administrative_ready": False, "disclaimer": DISCLAIMER, "files": files}, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    return item
+
+
+class Handler(SimpleHTTPRequestHandler):
+    def send_json(self, data: dict, status: int = 200) -> None:
+        body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_json({"ok": True})
+
+    def do_GET(self):
+        path = urlparse(self.path).path
+        if path == "/api/health":
+            self.send_json({"ok": True, "service": "EIA-Agent Cliente Portatil", "administrative_ready": False})
+            return
+        return super().do_GET()
+
+    def do_POST(self):
+        path = urlparse(self.path).path
+        try:
+            if path == "/api/projects":
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                payload = json.loads(self.rfile.read(length).decode("utf-8") if length else "{}")
+                self.send_json({"project": create_project(payload)}, HTTPStatus.CREATED)
+                return
+            match = re.fullmatch(r"/api/projects/([^/]+)/files", path)
+            if match:
+                form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={
+                    "REQUEST_METHOD": "POST",
+                    "CONTENT_TYPE": self.headers.get("Content-Type", ""),
+                })
+                control_id = str(form.getfirst("control_id") or "DOC-001")
+                file_item = form["file"] if "file" in form else None
+                if file_item is None or not getattr(file_item, "filename", ""):
+                    raise ValueError("No se recibio archivo")
+                content = file_item.file.read()
+                content_type = getattr(file_item, "type", None) or mimetypes.guess_type(file_item.filename)[0] or "application/octet-stream"
+                saved = upload_file(unquote(match.group(1)), control_id, file_item.filename, content, content_type)
+                self.send_json({"file": saved, "administrative_ready": False}, HTTPStatus.CREATED)
+                return
+            self.send_json({"error": "Ruta API no encontrada"}, HTTPStatus.NOT_FOUND)
+        except Exception as exc:
+            self.send_json({"error": str(exc), "administrative_ready": False}, HTTPStatus.BAD_REQUEST)
+
+    def translate_path(self, path: str) -> str:
+        rel = unquote(urlparse(path).path.lstrip("/")) or "index.html"
+        target = (ROOT / rel).resolve()
+        if ROOT not in target.parents and target != ROOT:
+            target = ROOT / "index.html"
+        if target.is_dir():
+            target = target / "index.html"
+        return str(target)
+
+
+if __name__ == "__main__":
+    PROJECTS.mkdir(exist_ok=True)
+    print(f"EIA-Agent Cliente disponible en http://{HOST}:{PORT}/")
+    print("Pulse Ctrl+C para detener.")
+    ThreadingHTTPServer((HOST, PORT), Handler).serve_forever()
+'''
+
+
+def _windows_launcher() -> str:
+    return "\r\n".join([
+        "@echo off",
+        "setlocal",
+        "cd /d %~dp0",
+        "where python >nul 2>nul",
+        "if errorlevel 1 (",
+        "  echo No se encontro Python en este equipo.",
+        "  echo Instale Python 3.11 o superior y vuelva a ejecutar este archivo.",
+        "  pause",
+        "  exit /b 1",
+        ")",
+        "start \"\" http://127.0.0.1:8765/",
+        "python server\\eia_client_server.py",
+        "pause",
+        "",
+    ])
+
+
+def _deploy_readme() -> str:
+    return "\n".join([
+        "# EIA-Agent Cliente - Uso portatil y deploy",
+        "",
+        "## Uso en el ordenador del cliente",
+        "",
+        "1. Descomprimir el ZIP en una carpeta local.",
+        "2. Ejecutar `INICIAR_APP_WINDOWS.bat`.",
+        "3. Abrir `http://127.0.0.1:8765/` si no se abre solo.",
+        "4. Usar `nuevo_expediente.html` para crear proyectos y subir archivos.",
+        "",
+        "Los expedientes nuevos se guardan en `expedientes_cliente/` dentro de esta carpeta.",
+        "",
+        "## Deploy provisional",
+        "",
+        "Este paquete incluye un servidor Python autonomo en `server/eia_client_server.py`.",
+        "Puede ejecutarse en un equipo del cliente, una maquina virtual o un servidor interno.",
+        "",
+        "Comando generico:",
+        "",
+        "```powershell",
+        "python server/eia_client_server.py",
+        "```",
+        "",
+        "## Alcance",
+        "",
+        "La app portatil prepara expedientes, recopila inputs y guarda evidencia declarada.",
+        "La generacion completa del Documento Ambiental con motor, mapas oficiales, DOCX,",
+        "anejos y auditoria requiere conectar este paquete con el motor EIA-Agent completo",
+        "o desplegar el repositorio como backend de produccion.",
+        "",
+        "administrative_ready: false",
+    ])
+
+
 def _artifact(root: Path, path: Path, artifact_id: str, label: str, kind: str, required: bool = False) -> ClientAppArtifact:
     return ClientAppArtifact(
         artifact_id=artifact_id,
@@ -446,12 +708,13 @@ def _readme_text(expediente_id: str, portal_status: str, submission_status: str)
         "",
         "## Uso",
         "",
-        "1. Abrir `index.html` en el navegador.",
-        "2. Revisar el estado ejecutivo del expediente.",
-        "3. Abrir `nuevo_expediente.html` para preparar proyectos nuevos.",
-        "4. Cargar o completar las memorias, coordenadas, fotos, planos y anexos indicados por la app.",
-        "5. Exportar la entrada cliente JSON y regenerar el expediente con los documentos completos.",
-        "6. Revisar el Documento Ambiental generado en `documentos/`.",
+        "1. En Windows, ejecutar `INICIAR_APP_WINDOWS.bat`.",
+        "2. Abrir `http://127.0.0.1:8765/` si no se abre automaticamente.",
+        "3. Revisar el estado ejecutivo del expediente.",
+        "4. Abrir `nuevo_expediente.html` para preparar proyectos nuevos.",
+        "5. Cargar memorias, coordenadas, fotos, planos y anexos.",
+        "6. Crear el expediente en backend o exportar la entrada JSON.",
+        "7. Revisar el Documento Ambiental generado en `documentos/` cuando se ejecute el motor completo.",
         "",
         "## Generacion esperada del expediente",
         "",
@@ -469,6 +732,9 @@ def _readme_text(expediente_id: str, portal_status: str, submission_status: str)
         "",
         "- `index.html`: app cliente autocontenida.",
         "- `nuevo_expediente.html`: mesa de entrada para crear proyectos nuevos.",
+        "- `INICIAR_APP_WINDOWS.bat`: arranque portatil de la app en Windows.",
+        "- `server/eia_client_server.py`: servidor portatil sin dependencias externas.",
+        "- `DEPLOY_PROVISIONAL.md`: instrucciones de uso portatil y despliegue.",
         "- `documentos/`: Documento Ambiental y borradores disponibles.",
         "- `planos_mapas/`: mapas, planos y clima si existen en el expediente.",
         "- `data/`: contratos JSON para UI/API.",
@@ -492,6 +758,12 @@ def _app_manifest(
         "submission_status": submission_status,
         "administrative_ready": False,
         "disclaimer": DISCLAIMER,
+        "portable_runtime": {
+            "windows_launcher": "INICIAR_APP_WINDOWS.bat",
+            "portable_server": "server/eia_client_server.py",
+            "local_url": "http://127.0.0.1:8765/",
+            "projects_dir": "expedientes_cliente/",
+        },
         "workflow": [
             "carga_inputs_cliente",
             "validacion_entrega",
@@ -526,6 +798,7 @@ def _app_manifest(
         ],
         "map_requirements": map_requirements,
         "new_project_entrypoint": "nuevo_expediente.html",
+        "deploy_entrypoint": "DEPLOY_PROVISIONAL.md",
         "artifacts": [artifact.to_dict() for artifact in artifacts],
     }
 
@@ -556,6 +829,9 @@ def build_client_app_package(
 
         _write_text(app_dir / "index.html", build_client_portal_html(portal))
         _write_text(app_dir / "nuevo_expediente.html", build_new_project_app_html(form_schema, map_requirements))
+        _write_text(app_dir / "INICIAR_APP_WINDOWS.bat", _windows_launcher())
+        _write_text(app_dir / "server" / "eia_client_server.py", _portable_server_script())
+        _write_text(app_dir / "DEPLOY_PROVISIONAL.md", _deploy_readme())
         _write_text(app_dir / "README_CLIENTE.md", _readme_text(exp.name, portal.status, submission.status))
         _write_json(data_dir / "cliente_portal.json", portal.to_dict())
         _write_json(data_dir / "cliente_form_schema.json", form_schema.to_dict())
@@ -570,6 +846,9 @@ def build_client_app_package(
         base_specs = [
             ("APP-HTML", "App cliente HTML", app_dir / "index.html", "html", True),
             ("APP-NEW-PROJECT", "App alta de nuevo expediente", app_dir / "nuevo_expediente.html", "html", True),
+            ("APP-WINDOWS-LAUNCHER", "Arranque portatil Windows", app_dir / "INICIAR_APP_WINDOWS.bat", "launcher", True),
+            ("APP-PORTABLE-SERVER", "Servidor portatil cliente", app_dir / "server" / "eia_client_server.py", "python", True),
+            ("APP-DEPLOY-README", "Guia de uso portatil y deploy", app_dir / "DEPLOY_PROVISIONAL.md", "markdown", True),
             ("APP-README", "Guia profesional cliente", app_dir / "README_CLIENTE.md", "markdown", True),
             ("APP-PORTAL", "Contrato portal JSON", data_dir / "cliente_portal.json", "json", True),
             ("APP-FORM", "Contrato formulario JSON", data_dir / "cliente_form_schema.json", "json", True),

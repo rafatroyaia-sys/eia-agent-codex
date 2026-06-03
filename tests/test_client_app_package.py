@@ -73,6 +73,9 @@ class TestClientAppPackage(unittest.TestCase):
         self.assertEqual(result.status, "APP_CLIENTE_LISTA")
         self.assertTrue((app_dir / "index.html").exists())
         self.assertTrue((app_dir / "nuevo_expediente.html").exists())
+        self.assertTrue((app_dir / "INICIAR_APP_WINDOWS.bat").exists())
+        self.assertTrue((app_dir / "server" / "eia_client_server.py").exists())
+        self.assertTrue((app_dir / "DEPLOY_PROVISIONAL.md").exists())
         self.assertTrue((app_dir / "README_CLIENTE.md").exists())
         self.assertTrue((app_dir / "data" / "app_manifest.json").exists())
         self.assertTrue((app_dir / "data" / "new_project_blueprint.json").exists())
@@ -94,6 +97,9 @@ class TestClientAppPackage(unittest.TestCase):
         self.assertIn("redaccion_documento_ambiental", manifest["workflow"])
         self.assertIn("mapas_planos", manifest["expected_outputs"])
         self.assertEqual(manifest["new_project_entrypoint"], "nuevo_expediente.html")
+        self.assertEqual(manifest["portable_runtime"]["windows_launcher"], "INICIAR_APP_WINDOWS.bat")
+        self.assertEqual(manifest["portable_runtime"]["local_url"], "http://127.0.0.1:8765/")
+        self.assertEqual(manifest["deploy_entrypoint"], "DEPLOY_PROVISIONAL.md")
         self.assertGreaterEqual(len(manifest["map_requirements"]), 12)
         self.assertTrue(any(item["title"] == "Ruido y receptores acusticos" for item in manifest["map_requirements"]))
         self.assertFalse(manifest["administrative_ready"])
@@ -109,12 +115,31 @@ class TestClientAppPackage(unittest.TestCase):
 
         self.assertIn("index.html", names)
         self.assertIn("nuevo_expediente.html", names)
+        self.assertIn("INICIAR_APP_WINDOWS.bat", names)
+        self.assertIn("server/eia_client_server.py", names)
+        self.assertIn("DEPLOY_PROVISIONAL.md", names)
         self.assertIn("README_CLIENTE.md", names)
         self.assertIn("data/app_manifest.json", names)
         self.assertIn("data/new_project_blueprint.json", names)
         self.assertIn("data/map_requirements.json", names)
         self.assertIn("documentos/documento_ambiental.docx", names)
         self.assertIn("planos_mapas/clima/climograma.png", names)
+
+    def test_portable_runtime_files_are_client_ready(self):
+        self._write_minimal_inputs()
+
+        build_client_app_package(self.exp, write_outputs=True)
+        app_dir = self.exp / "documento" / "cliente_app"
+        launcher = (app_dir / "INICIAR_APP_WINDOWS.bat").read_text(encoding="utf-8")
+        server = (app_dir / "server" / "eia_client_server.py").read_text(encoding="utf-8")
+        deploy = (app_dir / "DEPLOY_PROVISIONAL.md").read_text(encoding="utf-8")
+
+        self.assertIn("http://127.0.0.1:8765/", launcher)
+        self.assertIn("python server\\eia_client_server.py", launcher)
+        self.assertIn("/api/projects", server)
+        self.assertIn("expedientes_cliente", server)
+        self.assertIn("Uso en el ordenador del cliente", deploy)
+        self.assertIn("administrative_ready: false", deploy)
 
     def test_new_project_app_supports_real_intake_workflow(self):
         self._write_minimal_inputs()
