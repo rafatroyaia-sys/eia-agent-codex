@@ -19,7 +19,7 @@ Proporciona acceso desde consola a los módulos de productización:
   document-structure, document-numbering, document-toc, cliente-intake,
   cliente-form-schema, cliente-submission-check, cliente-plan,
   cliente-dashboard, cliente-portal, cliente-portal-site, cliente-trial-package,
-  cliente-app-package.
+  cliente-app-package, cliente-backend.
 
 Uso:
     python run_expediente.py <expediente> init-expediente [--force] [--no-guides]
@@ -59,6 +59,7 @@ Uso:
     python run_expediente.py <expediente> cliente-portal-site [--write]
     python run_expediente.py <expediente> cliente-trial-package [--write]
     python run_expediente.py <expediente> cliente-app-package [--write]
+    python run_expediente.py <expediente> cliente-backend [--host 127.0.0.1] [--port 8765]
 """
 import argparse
 import sys
@@ -2106,6 +2107,26 @@ def cmd_cliente_app_package(exp_path: Path, write: bool) -> int:
     return 0
 
 
+def cmd_cliente_backend(exp_path: Path, host: str, port: int) -> int:
+    """Backend local cliente: sirve app y API para expedientes nuevos."""
+    from eia_agent.core.client_app_package import build_client_app_package
+    from eia_agent.core.client_backend import serve_client_backend
+
+    try:
+        app_dir = exp_path / "documento" / "cliente_app"
+        if not app_dir.exists():
+            build_client_app_package(exp_path, write_outputs=True)
+        workspace = exp_path.parent
+        serve_client_backend(workspace=workspace, static_dir=app_dir, host=host, port=port)
+        return 0
+    except KeyboardInterrupt:
+        print("\nBackend cliente detenido.")
+        return 0
+    except Exception as exc:
+        print(f"Error arrancando backend cliente: {exc}", file=sys.stderr)
+        return 1
+
+
 def cmd_phase1(exp_path: Path, write: bool) -> int:
     """Ejecuta el pipeline de Fase 1 (IN-06). Por defecto solo lectura."""
     from eia_agent.core.phase1_pipeline import run_phase1
@@ -3004,6 +3025,25 @@ Ejemplos:
         help="Escribir documento/cliente_app/ y eia_agent_cliente_app.zip.",
     )
 
+    backend_p = sub.add_parser(
+        "cliente-backend",
+        help=(
+            "Arrancar backend local cliente con app web y API para crear expedientes "
+            "nuevos. No declara aptitud."
+        ),
+    )
+    backend_p.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host de escucha. Por defecto 127.0.0.1.",
+    )
+    backend_p.add_argument(
+        "--port",
+        type=int,
+        default=8765,
+        help="Puerto de escucha. Por defecto 8765.",
+    )
+
     return parser
 
 
@@ -3160,6 +3200,8 @@ def main(argv=None) -> int:
         return cmd_cliente_trial_package(exp_path, args.write)
     if args.command == "cliente-app-package":
         return cmd_cliente_app_package(exp_path, args.write)
+    if args.command == "cliente-backend":
+        return cmd_cliente_backend(exp_path, args.host, args.port)
 
     # No debería llegar aquí (argparse lo impide con required=True)
     parser.print_help()

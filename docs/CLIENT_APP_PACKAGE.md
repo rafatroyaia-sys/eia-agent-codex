@@ -26,6 +26,30 @@ Genera:
 - `documento/cliente_app/`
 - `documento/eia_agent_cliente_app.zip`
 
+## Backend local
+
+Para usar la app como herramienta de trabajo con alta real de expedientes:
+
+```powershell
+venv\Scripts\python run_expediente.py expediente-EIA-2026-RECIMETAL-NAVE-222 cliente-backend --host 127.0.0.1 --port 8765
+```
+
+Despues abrir:
+
+```text
+http://127.0.0.1:8765/
+```
+
+El backend sirve la app y expone API local para:
+
+- crear expedientes nuevos en `expedientes_cliente/`,
+- guardar `control_interno/entrada_cliente.json`,
+- subir memorias, fotos, planos y cartografia a `inputs/`,
+- registrar `control_interno/inventario_archivos_cliente.json`,
+- preparar el plan de comandos para generar el Documento Ambiental.
+
+No ejecuta automaticamente la presentacion administrativa ni declara aptitud.
+
 ## Contenido principal
 
 - `index.html`: app cliente autocontenida.

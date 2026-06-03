@@ -270,6 +270,18 @@ def build_new_project_app_html(
       color: #17495a;
       margin-bottom: 14px;
     }}
+    .backend-status {{
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 14px;
+      border: 1px solid rgba(255,255,255,.35);
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: #d7edf3;
+      font-size: 13px;
+      font-weight: 700;
+    }}
     @media (max-width: 980px) {{
       .layout, .summary {{ grid-template-columns: 1fr; }}
       header {{ padding: 24px 20px; }}
@@ -282,11 +294,13 @@ def build_new_project_app_html(
     <h1>EIA-Agent | Nuevo expediente ambiental</h1>
     <p>Alta profesional de proyectos para generar Documentos Ambientales con memorias, coordenadas, fotos, mapas, climograma, medidas, PVA y control de presentacion.</p>
     <div class="topbar">
+      <button id="create-backend">Crear expediente en backend</button>
       <button id="save-project">Guardar proyecto</button>
       <button class="ghost" id="download-json">Descargar entrada JSON</button>
       <button class="ghost" id="download-md">Descargar checklist</button>
       <button class="ghost" id="reset-form">Nuevo limpio</button>
     </div>
+    <div class="backend-status" id="backend-status">Backend: comprobando conexion</div>
   </header>
   <main>
     <section class="summary">
@@ -294,6 +308,7 @@ def build_new_project_app_html(
       <div class="metric"><strong id="score-files">0/{len(required_uploads)}</strong><span>Bloques documentales</span></div>
       <div class="metric"><strong>{len(maps)}</strong><span>Mapas/planos esperados</span></div>
       <div class="metric"><strong id="score-status">Pendiente</strong><span>Estado de entrada</span></div>
+      <div class="metric"><strong id="backend-project">Sin crear</strong><span>Expediente backend</span></div>
     </section>
     <section class="layout">
       <aside class="panel">
@@ -353,6 +368,7 @@ def build_new_project_app_html(
           <h2>4. Salida para generar el Documento Ambiental</h2>
           <p class="muted">Cuando los minimos esten completos, descargue la entrada JSON y el checklist. Esa entrada alimenta el motor EIA-Agent para crear el expediente, sus mapas, climograma, Documento Ambiental DOCX y auditoria.</p>
           <div class="actions">
+            <button id="create-backend-bottom">Crear expediente en backend</button>
             <button id="download-json-bottom">Descargar entrada JSON</button>
             <button class="secondary" id="download-md-bottom">Descargar checklist</button>
           </div>
@@ -366,6 +382,8 @@ def build_new_project_app_html(
     const disclaimer = {disclaimer_json};
     const essentialFields = ['project_name', 'promoter', 'location', 'coordinates_wgs84', 'activity_type', 'object_description'];
     const storageKey = 'eia_agent_client_projects_v1';
+    let backendOnline = false;
+    let backendProjectId = '';
     function value(id) {{ return document.getElementById(id)?.value?.trim() || ''; }}
     function fileMeta(controlId) {{
       const input = document.getElementById(`file-${{controlId}}`);
@@ -422,6 +440,7 @@ def build_new_project_app_html(
       document.getElementById('score-required').textContent = `${{data.validation.essential_complete}}/${{data.validation.essential_total}}`;
       document.getElementById('score-files').textContent = `${{data.validation.high_files_complete}}/${{data.validation.high_files_total}}`;
       document.getElementById('score-status').textContent = data.validation.ready_for_engine ? 'Completa' : 'Pendiente';
+      document.getElementById('backend-project').textContent = backendProjectId || 'Sin crear';
       const list = document.getElementById('checklist');
       list.innerHTML = '';
       const items = [
@@ -510,9 +529,59 @@ def build_new_project_app_html(
       return lines.join('\\n');
     }}
     function downloadMd() {{ download(`${{safeName()}}_checklist_entrada.md`, checklistMarkdown(), 'text/markdown'); }}
+    async function checkBackend() {{
+      const status = document.getElementById('backend-status');
+      try {{
+        const res = await fetch('/api/health', {{ cache: 'no-store' }});
+        const data = await res.json();
+        backendOnline = Boolean(data.ok);
+        status.textContent = backendOnline ? 'Backend: conectado' : 'Backend: no disponible';
+        status.className = backendOnline ? 'backend-status ok' : 'backend-status';
+      }} catch (err) {{
+        backendOnline = false;
+        status.textContent = 'Backend: modo navegador local';
+        status.className = 'backend-status';
+      }}
+    }}
+    async function createInBackend() {{
+      const data = currentProject();
+      if (!backendOnline) {{
+        alert('Backend no conectado. Puede descargar la entrada JSON y cargarla despues en el motor.');
+        return;
+      }}
+      const res = await fetch('/api/projects', {{
+        method: 'POST',
+        headers: {{ 'Content-Type': 'application/json' }},
+        body: JSON.stringify(data)
+      }});
+      if (!res.ok) {{
+        const errorText = await res.text();
+        alert(`No se pudo crear el expediente: ${{errorText}}`);
+        return;
+      }}
+      const created = await res.json();
+      backendProjectId = created.project.project_id;
+      const uploadInputs = Array.from(document.querySelectorAll('input[type=file]'));
+      for (const input of uploadInputs) {{
+        const controlId = input.dataset.control;
+        for (const file of Array.from(input.files || [])) {{
+          const form = new FormData();
+          form.append('control_id', controlId);
+          form.append('file', file);
+          await fetch(`/api/projects/${{encodeURIComponent(backendProjectId)}}/files`, {{
+            method: 'POST',
+            body: form
+          }});
+        }}
+      }}
+      refresh();
+      alert(`Expediente creado: ${{backendProjectId}}`);
+    }}
     document.querySelectorAll('input, textarea, select').forEach((el) => el.addEventListener('input', refresh));
     document.querySelectorAll('input[type=file]').forEach((el) => el.addEventListener('change', refresh));
     document.getElementById('save-project').addEventListener('click', saveCurrent);
+    document.getElementById('create-backend').addEventListener('click', createInBackend);
+    document.getElementById('create-backend-bottom').addEventListener('click', createInBackend);
     document.getElementById('download-json').addEventListener('click', downloadJson);
     document.getElementById('download-json-bottom').addEventListener('click', downloadJson);
     document.getElementById('download-md').addEventListener('click', downloadMd);
@@ -524,6 +593,7 @@ def build_new_project_app_html(
     }});
     renderProjects();
     refresh();
+    checkBackend();
   </script>
 </body>
 </html>
