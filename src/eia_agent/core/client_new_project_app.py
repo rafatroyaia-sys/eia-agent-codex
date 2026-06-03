@@ -1,0 +1,530 @@
+"""
+client_new_project_app -- mesa de entrada para expedientes nuevos.
+
+Genera una app HTML autocontenida para que el cliente prepare un nuevo
+expediente ambiental: datos basicos, documentos, fotos, coordenadas,
+cartografia requerida, validacion minima y exportacion de paquete de entrada.
+
+No ejecuta fases tecnicas y no declara aptitud administrativa.
+"""
+from __future__ import annotations
+
+import json
+from html import escape
+from typing import Any
+
+from eia_agent.core.client_form_schema import ClientFormSchema
+
+
+DISCLAIMER = (
+    "La app prepara la entrada de un nuevo Documento Ambiental y verifica "
+    "minimos de entrega. La aptitud administrativa depende del cierre tecnico, "
+    "la cartografia oficial, la trazabilidad y la auditoria final conforme."
+)
+
+
+def _text(value: Any) -> str:
+    return escape(str(value if value is not None else ""))
+
+
+def _controls_payload(schema: ClientFormSchema) -> list[dict[str, Any]]:
+    payload: list[dict[str, Any]] = []
+    for control in schema.controls:
+        payload.append({
+            "control_id": control.control_id,
+            "label": control.label,
+            "control_type": control.control_type,
+            "priority": control.priority,
+            "required": control.required,
+            "target": control.target,
+            "help_text": control.help_text,
+            "accepted_formats": control.accepted_formats,
+            "validations": control.validations,
+        })
+    return payload
+
+
+def build_new_project_blueprint(
+    schema: ClientFormSchema,
+    map_requirements: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Contrato funcional para crear expedientes nuevos desde UI/API."""
+    return {
+        "app_name": "EIA-Agent Nuevo Expediente",
+        "version": "1.0",
+        "administrative_ready": False,
+        "disclaimer": DISCLAIMER,
+        "minimum_project_fields": [
+            "project_name",
+            "promoter",
+            "location",
+            "coordinates_wgs84",
+            "activity_type",
+            "object_description",
+        ],
+        "workflow": [
+            {
+                "step": "alta_proyecto",
+                "label": "Alta del proyecto",
+                "output": "entrada_cliente.json",
+            },
+            {
+                "step": "carga_documental",
+                "label": "Memorias, fotos, coordenadas, planos y anexos",
+                "output": "inventario_archivos_cliente.json",
+            },
+            {
+                "step": "validacion_minimos",
+                "label": "Control de obligatorios y bloqueantes",
+                "output": "checklist_entrada_cliente.md",
+            },
+            {
+                "step": "generacion_tecnica",
+                "label": "Ejecucion del motor EIA-Agent por fases",
+                "output": "Documento Ambiental DOCX, mapas, climograma y anejos",
+            },
+        ],
+        "controls": _controls_payload(schema),
+        "map_requirements": map_requirements,
+        "expected_outputs": [
+            "documento_ambiental_final_revisable.docx",
+            "documento_ambiental_borrador_con_figuras.docx",
+            "mapas_png",
+            "climograma_png",
+            "anejos",
+            "auditoria_final",
+        ],
+    }
+
+
+def build_new_project_app_html(
+    schema: ClientFormSchema,
+    map_requirements: list[dict[str, Any]],
+) -> str:
+    """Renderiza app HTML autocontenida para iniciar expedientes nuevos."""
+    controls = _controls_payload(schema)
+    required_uploads = [c for c in controls if c["required"] and c["control_type"] == "file_upload"]
+    maps = list(map_requirements)
+    controls_json = json.dumps(controls, ensure_ascii=False)
+    maps_json = json.dumps(maps, ensure_ascii=False)
+    disclaimer_json = json.dumps(DISCLAIMER, ensure_ascii=False)
+    upload_rows = "\n".join(
+        "<tr>"
+        f"<td><strong>{_text(c['control_id'])}</strong></td>"
+        f"<td>{_text(c['label'])}<small>{_text(c['help_text'])}</small></td>"
+        f"<td><span class='pill {_text(str(c['priority']).lower())}'>{_text(c['priority'])}</span></td>"
+        f"<td>{_text(', '.join(c.get('accepted_formats') or ['PDF', 'DOCX', 'PNG', 'JPG']))}</td>"
+        f"<td><input id='file-{_text(c['control_id'])}' data-control='{_text(c['control_id'])}' type='file' multiple></td>"
+        "</tr>"
+        for c in required_uploads
+    )
+    map_rows = "\n".join(
+        "<tr>"
+        f"<td><strong>{_text(m.get('map_id'))}</strong></td>"
+        f"<td>{_text(m.get('title'))}<small>{_text(m.get('purpose'))}</small></td>"
+        f"<td><span class='pill {_text(str(m.get('priority', '')).lower())}'>{_text(m.get('priority'))}</span></td>"
+        f"<td>{_text(', '.join(m.get('required_layers') or []))}</td>"
+        "</tr>"
+        for m in maps
+    )
+    return f"""<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>EIA-Agent - Nuevo expediente ambiental</title>
+  <style>
+    :root {{
+      --bg: #eef2f5;
+      --panel: #ffffff;
+      --ink: #15212b;
+      --muted: #667085;
+      --line: #d5dde5;
+      --brand: #145369;
+      --brand-2: #1f7a8c;
+      --ok: #146c43;
+      --warn: #995c00;
+      --danger: #a12121;
+      --ok-bg: #e1f4e9;
+      --warn-bg: #fff0cf;
+      --danger-bg: #ffe1df;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: Arial, Helvetica, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      line-height: 1.45;
+    }}
+    header {{
+      background: #0c2e3a;
+      color: white;
+      padding: 30px 34px;
+    }}
+    header h1 {{ margin: 0 0 8px; font-size: 30px; letter-spacing: 0; }}
+    header p {{ margin: 0; color: #d7edf3; max-width: 980px; }}
+    main {{ max-width: 1220px; margin: 0 auto; padding: 24px; }}
+    .topbar {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }}
+    button {{
+      border: 1px solid var(--brand);
+      background: var(--brand);
+      color: white;
+      border-radius: 6px;
+      padding: 10px 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }}
+    button.secondary {{ background: white; color: var(--brand); }}
+    button.ghost {{ background: transparent; color: white; border-color: rgba(255,255,255,.35); }}
+    .layout {{
+      display: grid;
+      grid-template-columns: minmax(260px, 330px) minmax(0, 1fr);
+      gap: 18px;
+      align-items: start;
+    }}
+    .panel {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+    }}
+    .panel h2 {{ margin: 0 0 12px; font-size: 18px; letter-spacing: 0; }}
+    .panel h3 {{ margin: 18px 0 8px; font-size: 15px; }}
+    .summary {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }}
+    .metric {{
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+    }}
+    .metric strong {{ display: block; font-size: 26px; }}
+    .metric span {{ color: var(--muted); font-size: 13px; }}
+    label {{
+      display: grid;
+      gap: 6px;
+      margin-bottom: 11px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }}
+    input, textarea, select {{
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      font: inherit;
+      color: var(--ink);
+      background: white;
+    }}
+    textarea {{ min-height: 110px; resize: vertical; }}
+    table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
+    th, td {{ padding: 10px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }}
+    th {{ color: var(--muted); font-size: 12px; text-transform: uppercase; }}
+    td small {{ display: block; color: var(--muted); margin-top: 3px; }}
+    .pill {{
+      display: inline-flex;
+      border-radius: 999px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }}
+    .alta, .danger {{ background: var(--danger-bg); color: var(--danger); border-color: #f2b4b2; }}
+    .media, .warn {{ background: var(--warn-bg); color: var(--warn); border-color: #f0c36b; }}
+    .ok {{ background: var(--ok-bg); color: var(--ok); border-color: #a8dbc0; }}
+    .muted {{ color: var(--muted); }}
+    .actions {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }}
+    .checklist {{ display: grid; gap: 8px; padding: 0; list-style: none; margin: 0; }}
+    .checklist li {{
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-bottom: 1px solid var(--line);
+      padding: 8px 0;
+    }}
+    .project-list {{ display: grid; gap: 8px; }}
+    .project-item {{
+      width: 100%;
+      text-align: left;
+      background: #f8fafc;
+      color: var(--ink);
+      border-color: var(--line);
+    }}
+    .note {{
+      background: #e8f3f6;
+      border: 1px solid #b9dbe4;
+      border-radius: 8px;
+      padding: 12px;
+      color: #17495a;
+      margin-bottom: 14px;
+    }}
+    @media (max-width: 980px) {{
+      .layout, .summary {{ grid-template-columns: 1fr; }}
+      header {{ padding: 24px 20px; }}
+      main {{ padding: 16px; }}
+    }}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>EIA-Agent | Nuevo expediente ambiental</h1>
+    <p>Alta profesional de proyectos para generar Documentos Ambientales con memorias, coordenadas, fotos, mapas, climograma, medidas, PVA y control de presentacion.</p>
+    <div class="topbar">
+      <button id="save-project">Guardar proyecto</button>
+      <button class="ghost" id="download-json">Descargar entrada JSON</button>
+      <button class="ghost" id="download-md">Descargar checklist</button>
+      <button class="ghost" id="reset-form">Nuevo limpio</button>
+    </div>
+  </header>
+  <main>
+    <section class="summary">
+      <div class="metric"><strong id="score-required">0/6</strong><span>Datos esenciales</span></div>
+      <div class="metric"><strong id="score-files">0/{len(required_uploads)}</strong><span>Bloques documentales</span></div>
+      <div class="metric"><strong>{len(maps)}</strong><span>Mapas/planos esperados</span></div>
+      <div class="metric"><strong id="score-status">Pendiente</strong><span>Estado de entrada</span></div>
+    </section>
+    <section class="layout">
+      <aside class="panel">
+        <h2>Expedientes guardados</h2>
+        <div class="project-list" id="project-list"></div>
+        <h3>Control de minimos</h3>
+        <ul class="checklist" id="checklist"></ul>
+      </aside>
+      <div>
+        <section class="panel">
+          <h2>1. Datos del proyecto</h2>
+          <div class="note">Los datos introducidos quedan como DECLARADOS hasta que el tecnico los cierre con evidencia y cartografia oficial.</div>
+          <label>Nombre del proyecto
+            <input id="project_name" data-required="true" placeholder="Ej. Centro de valorizacion de residuos no peligrosos">
+          </label>
+          <label>Promotor / titular
+            <input id="promoter" data-required="true" placeholder="Razon social del promotor">
+          </label>
+          <label>Isla, municipio y direccion
+            <input id="location" data-required="true" placeholder="Municipio, isla, direccion o paraje">
+          </label>
+          <label>Coordenadas WGS84
+            <input id="coordinates_wgs84" data-required="true" placeholder="28.000000, -16.000000">
+          </label>
+          <label>Referencia catastral
+            <input id="cadastre_reference" placeholder="Si consta">
+          </label>
+          <label>Tipo de actividad
+            <select id="activity_type" data-required="true">
+              <option value="">Seleccionar</option>
+              <option>Gestion de residuos</option>
+              <option>Actividad industrial</option>
+              <option>Infraestructura</option>
+              <option>Actividad energetica</option>
+              <option>Otra actividad sometida a evaluacion ambiental</option>
+            </select>
+          </label>
+          <label>Descripcion del objeto evaluado
+            <textarea id="object_description" data-required="true" placeholder="Operaciones, capacidad, superficies, procesos, accesos, horarios, focos de emision, residuos, agua, energia y elementos incluidos/excluidos"></textarea>
+          </label>
+        </section>
+        <section class="panel">
+          <h2>2. Documentacion y archivos</h2>
+          <table>
+            <thead><tr><th>ID</th><th>Requisito</th><th>Prioridad</th><th>Formatos</th><th>Archivos</th></tr></thead>
+            <tbody>{upload_rows}</tbody>
+          </table>
+        </section>
+        <section class="panel">
+          <h2>3. Cartografia, planos y clima esperados</h2>
+          <table>
+            <thead><tr><th>ID</th><th>Mapa/plano</th><th>Prioridad</th><th>Capas minimas</th></tr></thead>
+            <tbody>{map_rows}</tbody>
+          </table>
+        </section>
+        <section class="panel">
+          <h2>4. Salida para generar el Documento Ambiental</h2>
+          <p class="muted">Cuando los minimos esten completos, descargue la entrada JSON y el checklist. Esa entrada alimenta el motor EIA-Agent para crear el expediente, sus mapas, climograma, Documento Ambiental DOCX y auditoria.</p>
+          <div class="actions">
+            <button id="download-json-bottom">Descargar entrada JSON</button>
+            <button class="secondary" id="download-md-bottom">Descargar checklist</button>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <script>
+    const controls = {controls_json};
+    const mapRequirements = {maps_json};
+    const disclaimer = {disclaimer_json};
+    const essentialFields = ['project_name', 'promoter', 'location', 'coordinates_wgs84', 'activity_type', 'object_description'];
+    const storageKey = 'eia_agent_client_projects_v1';
+    function value(id) {{ return document.getElementById(id)?.value?.trim() || ''; }}
+    function fileMeta(controlId) {{
+      const input = document.getElementById(`file-${{controlId}}`);
+      return Array.from(input?.files || []).map((f) => ({{ name: f.name, size_bytes: f.size, type: f.type || 'unknown' }}));
+    }}
+    function currentProject() {{
+      const data = {{
+        app: 'EIA-Agent Nuevo Expediente',
+        created_at: new Date().toISOString(),
+        evidence_state_default: 'DECLARADO',
+        administrative_ready: false,
+        disclaimer,
+        project: {{
+          project_name: value('project_name'),
+          promoter: value('promoter'),
+          location: value('location'),
+          coordinates_wgs84: value('coordinates_wgs84'),
+          cadastre_reference: value('cadastre_reference'),
+          activity_type: value('activity_type'),
+          object_description: value('object_description')
+        }},
+        files: controls.filter((c) => c.control_type === 'file_upload').map((c) => ({{
+          control_id: c.control_id,
+          label: c.label,
+          priority: c.priority,
+          required: c.required,
+          target: c.target,
+          selected_files: fileMeta(c.control_id)
+        }})),
+        map_requirements: mapRequirements,
+        next_engine_step: 'Crear expediente EIA-Agent y ejecutar fases con control de gates'
+      }};
+      data.validation = validate(data);
+      return data;
+    }}
+    function validate(data) {{
+      const missingFields = essentialFields.filter((id) => !data.project[id]);
+      const missingFiles = data.files.filter((f) => f.required && f.priority === 'ALTA' && f.selected_files.length === 0).map((f) => f.control_id);
+      const coordinateOk = /^-?\\d{{1,2}}([\\.,]\\d+)?\\s*,\\s*-?\\d{{1,3}}([\\.,]\\d+)?$/.test(data.project.coordinates_wgs84 || '');
+      const blockers = [...missingFields.map((id) => `Falta dato esencial: ${{id}}`), ...missingFiles.map((id) => `Falta bloque documental ALTA: ${{id}}`)];
+      if (data.project.coordinates_wgs84 && !coordinateOk) blockers.push('Formato de coordenadas WGS84 no reconocido');
+      return {{
+        essential_complete: essentialFields.length - missingFields.length,
+        essential_total: essentialFields.length,
+        high_files_complete: data.files.filter((f) => f.required && f.priority === 'ALTA' && f.selected_files.length > 0).length,
+        high_files_total: data.files.filter((f) => f.required && f.priority === 'ALTA').length,
+        coordinate_format_ok: coordinateOk,
+        blockers,
+        ready_for_engine: blockers.length === 0
+      }};
+    }}
+    function refresh() {{
+      const data = currentProject();
+      document.getElementById('score-required').textContent = `${{data.validation.essential_complete}}/${{data.validation.essential_total}}`;
+      document.getElementById('score-files').textContent = `${{data.validation.high_files_complete}}/${{data.validation.high_files_total}}`;
+      document.getElementById('score-status').textContent = data.validation.ready_for_engine ? 'Completa' : 'Pendiente';
+      const list = document.getElementById('checklist');
+      list.innerHTML = '';
+      const items = [
+        ['Datos esenciales', data.validation.essential_complete === data.validation.essential_total],
+        ['Coordenadas WGS84 validables', data.validation.coordinate_format_ok],
+        ['Documentos ALTA cargados', data.validation.high_files_complete === data.validation.high_files_total],
+        ['Catalogo cartografico previsto', mapRequirements.length >= 12],
+        ['Aptitud administrativa automatica', false]
+      ];
+      items.forEach(([label, ok]) => {{
+        const li = document.createElement('li');
+        li.innerHTML = `<span>${{label}}</span><span class="pill ${{ok ? 'ok' : 'warn'}}">${{ok ? 'OK' : 'Pendiente'}}</span>`;
+        list.appendChild(li);
+      }});
+    }}
+    function projects() {{ return JSON.parse(localStorage.getItem(storageKey) || '[]'); }}
+    function saveProjects(items) {{ localStorage.setItem(storageKey, JSON.stringify(items)); renderProjects(); }}
+    function renderProjects() {{
+      const box = document.getElementById('project-list');
+      const items = projects();
+      box.innerHTML = items.length ? '' : '<p class="muted">No hay expedientes guardados en este navegador.</p>';
+      items.forEach((item, idx) => {{
+        const btn = document.createElement('button');
+        btn.className = 'project-item';
+        btn.textContent = item.project?.project_name || `Proyecto ${{idx + 1}}`;
+        btn.addEventListener('click', () => loadProject(item));
+        box.appendChild(btn);
+      }});
+    }}
+    function loadProject(data) {{
+      Object.entries(data.project || {{}}).forEach(([id, val]) => {{
+        const el = document.getElementById(id);
+        if (el) el.value = val || '';
+      }});
+      refresh();
+    }}
+    function saveCurrent() {{
+      const data = currentProject();
+      const items = projects().filter((p) => (p.project?.project_name || '') !== (data.project.project_name || ''));
+      items.unshift(data);
+      saveProjects(items.slice(0, 20));
+      refresh();
+    }}
+    function download(name, text, type) {{
+      const blob = new Blob([text], {{ type }});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }}
+    function safeName() {{
+      return (value('project_name') || 'nuevo_expediente').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'nuevo_expediente';
+    }}
+    function downloadJson() {{
+      const data = currentProject();
+      download(`${{safeName()}}_entrada_cliente.json`, JSON.stringify(data, null, 2), 'application/json');
+    }}
+    function checklistMarkdown() {{
+      const data = currentProject();
+      const lines = [
+        `# Checklist entrada cliente - ${{data.project.project_name || 'Nuevo expediente'}}`,
+        '',
+        `> ${{disclaimer}}`,
+        '',
+        '## Estado',
+        '',
+        `- Datos esenciales: ${{data.validation.essential_complete}}/${{data.validation.essential_total}}`,
+        `- Documentos ALTA: ${{data.validation.high_files_complete}}/${{data.validation.high_files_total}}`,
+        `- Coordenadas WGS84 validables: ${{data.validation.coordinate_format_ok}}`,
+        `- Listo para motor: ${{data.validation.ready_for_engine}}`,
+        '- administrative_ready: false',
+        '',
+        '## Bloqueantes',
+        ''
+      ];
+      if (data.validation.blockers.length) data.validation.blockers.forEach((b) => lines.push(`- ${{b}}`));
+      else lines.push('- Sin bloqueantes de entrada detectados por la app.');
+      lines.push('', '## Archivos declarados', '');
+      data.files.forEach((f) => lines.push(`- ${{f.control_id}} ${{f.label}}: ${{f.selected_files.map((x) => x.name).join(', ') || 'PENDIENTE'}}`));
+      lines.push('', '## Mapas esperados', '');
+      mapRequirements.forEach((m) => lines.push(`- ${{m.map_id}} ${{m.title}} (${{m.priority}})`));
+      return lines.join('\\n');
+    }}
+    function downloadMd() {{ download(`${{safeName()}}_checklist_entrada.md`, checklistMarkdown(), 'text/markdown'); }}
+    document.querySelectorAll('input, textarea, select').forEach((el) => el.addEventListener('input', refresh));
+    document.querySelectorAll('input[type=file]').forEach((el) => el.addEventListener('change', refresh));
+    document.getElementById('save-project').addEventListener('click', saveCurrent);
+    document.getElementById('download-json').addEventListener('click', downloadJson);
+    document.getElementById('download-json-bottom').addEventListener('click', downloadJson);
+    document.getElementById('download-md').addEventListener('click', downloadMd);
+    document.getElementById('download-md-bottom').addEventListener('click', downloadMd);
+    document.getElementById('reset-form').addEventListener('click', () => {{
+      document.querySelectorAll('input, textarea').forEach((el) => {{ if (el.type !== 'file') el.value = ''; }});
+      document.querySelectorAll('select').forEach((el) => el.value = '');
+      refresh();
+    }});
+    renderProjects();
+    refresh();
+  </script>
+</body>
+</html>
+"""

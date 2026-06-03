@@ -5,6 +5,7 @@
 - app HTML autocontenida,
 - navegacion interna con botones,
 - ficha de nuevo proyecto exportable a JSON,
+- app especifica `nuevo_expediente.html` para iniciar proyectos nuevos,
 - contratos JSON para UI/API,
 - guia de uso cliente,
 - Documento Ambiental disponible,
@@ -28,8 +29,10 @@ Genera:
 ## Contenido principal
 
 - `index.html`: app cliente autocontenida.
+- `nuevo_expediente.html`: mesa de entrada para expedientes nuevos.
 - `README_CLIENTE.md`: guia profesional de uso.
 - `data/app_manifest.json`: flujo funcional, inputs y outputs esperados.
+- `data/new_project_blueprint.json`: contrato para alta de nuevos proyectos.
 - `data/map_requirements.json`: catalogo profesional de mapas requeridos.
 - `data/cliente_form_schema.json`: campos, validaciones y subidas.
 - `data/cliente_submission_validation.json`: control de entrega.
@@ -46,6 +49,10 @@ auditoria final conforme.
 
 ## Mejoras funcionales
 
+- `nuevo_expediente.html` permite crear una entrada de proyecto nueva con
+  datos esenciales, coordenadas, promotor, actividad, descripcion del objeto,
+  documentos, fotos, planos y cartografia. Guarda proyectos en el navegador
+  mediante `localStorage` y exporta `entrada_cliente.json` y checklist Markdown.
 - Si falta `clima/climograma.png` pero existe tabla mensual en
   `clima/descripcion_clima.md`, la app genera un climograma PNG visual.
 - La app incluye un catalogo de 12 mapas/planos profesionales, incluyendo
@@ -54,3 +61,17 @@ auditoria final conforme.
 - El documento `documento_ambiental_final_revisable.docx` dentro de la app se
   toma del DOCX mas completo y reciente disponible, priorizando el documento
   enriquecido con figuras.
+
+## Uso para un proyecto nuevo
+
+1. Abrir `nuevo_expediente.html`.
+2. Rellenar los datos esenciales del proyecto y coordenadas WGS84.
+3. Adjuntar memorias, fotos, planos y cartografia disponible.
+4. Revisar el control de minimos y bloqueantes de entrada.
+5. Descargar `entrada_cliente.json` y `checklist_entrada.md`.
+6. Crear el expediente en el motor EIA-Agent y ejecutar las fases con gates.
+
+La app de navegador prepara una entrada real y controlada para el motor. La
+generacion completa del Documento Ambiental DOCX, mapas oficiales, climograma,
+anejos y auditoria requiere ejecutar el backend/motor EIA-Agent o desplegarlo
+como servicio web.

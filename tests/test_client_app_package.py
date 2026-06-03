@@ -72,8 +72,10 @@ class TestClientAppPackage(unittest.TestCase):
 
         self.assertEqual(result.status, "APP_CLIENTE_LISTA")
         self.assertTrue((app_dir / "index.html").exists())
+        self.assertTrue((app_dir / "nuevo_expediente.html").exists())
         self.assertTrue((app_dir / "README_CLIENTE.md").exists())
         self.assertTrue((app_dir / "data" / "app_manifest.json").exists())
+        self.assertTrue((app_dir / "data" / "new_project_blueprint.json").exists())
         self.assertTrue((app_dir / "data" / "map_requirements.json").exists())
         self.assertTrue((app_dir / "markdown" / "map_requirements.md").exists())
         self.assertTrue((app_dir / "documentos" / "documento_ambiental.docx").exists())
@@ -91,6 +93,7 @@ class TestClientAppPackage(unittest.TestCase):
         self.assertEqual(manifest["app_name"], "EIA-Agent Cliente")
         self.assertIn("redaccion_documento_ambiental", manifest["workflow"])
         self.assertIn("mapas_planos", manifest["expected_outputs"])
+        self.assertEqual(manifest["new_project_entrypoint"], "nuevo_expediente.html")
         self.assertGreaterEqual(len(manifest["map_requirements"]), 12)
         self.assertTrue(any(item["title"] == "Ruido y receptores acusticos" for item in manifest["map_requirements"]))
         self.assertFalse(manifest["administrative_ready"])
@@ -105,11 +108,32 @@ class TestClientAppPackage(unittest.TestCase):
             names = set(zf.namelist())
 
         self.assertIn("index.html", names)
+        self.assertIn("nuevo_expediente.html", names)
         self.assertIn("README_CLIENTE.md", names)
         self.assertIn("data/app_manifest.json", names)
+        self.assertIn("data/new_project_blueprint.json", names)
         self.assertIn("data/map_requirements.json", names)
         self.assertIn("documentos/documento_ambiental.docx", names)
         self.assertIn("planos_mapas/clima/climograma.png", names)
+
+    def test_new_project_app_supports_real_intake_workflow(self):
+        self._write_minimal_inputs()
+
+        build_client_app_package(self.exp, write_outputs=True)
+        html = (self.exp / "documento" / "cliente_app" / "nuevo_expediente.html").read_text(encoding="utf-8")
+        blueprint = json.loads(
+            (self.exp / "documento" / "cliente_app" / "data" / "new_project_blueprint.json").read_text(encoding="utf-8")
+        )
+
+        self.assertIn("Nuevo expediente ambiental", html)
+        self.assertIn("Guardar proyecto", html)
+        self.assertIn("Descargar entrada JSON", html)
+        self.assertIn("localStorage", html)
+        self.assertIn("ready_for_engine", html)
+        self.assertIn("Documento Ambiental DOCX", html)
+        self.assertIn("alta_proyecto", blueprint["workflow"][0]["step"])
+        self.assertIn("coordinates_wgs84", blueprint["minimum_project_fields"])
+        self.assertGreaterEqual(len(blueprint["map_requirements"]), 12)
 
     def test_zip_excludes_internal_scripts(self):
         self._write_minimal_inputs()

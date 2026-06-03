@@ -25,6 +25,10 @@ from eia_agent.core.client_portal import (
     build_client_portal_markdown,
 )
 from eia_agent.core.client_portal_site import build_client_portal_html
+from eia_agent.core.client_new_project_app import (
+    build_new_project_app_html,
+    build_new_project_blueprint,
+)
 from eia_agent.core.client_submission_validator import (
     build_client_submission_validation,
     build_client_submission_validation_markdown,
@@ -444,9 +448,10 @@ def _readme_text(expediente_id: str, portal_status: str, submission_status: str)
         "",
         "1. Abrir `index.html` en el navegador.",
         "2. Revisar el estado ejecutivo del expediente.",
-        "3. Cargar o completar las memorias, coordenadas, fotos, planos y anexos indicados por la app.",
-        "4. Regenerar el expediente con los documentos completos.",
-        "5. Revisar el Documento Ambiental generado en `documentos/`.",
+        "3. Abrir `nuevo_expediente.html` para preparar proyectos nuevos.",
+        "4. Cargar o completar las memorias, coordenadas, fotos, planos y anexos indicados por la app.",
+        "5. Exportar la entrada cliente JSON y regenerar el expediente con los documentos completos.",
+        "6. Revisar el Documento Ambiental generado en `documentos/`.",
         "",
         "## Generacion esperada del expediente",
         "",
@@ -463,6 +468,7 @@ def _readme_text(expediente_id: str, portal_status: str, submission_status: str)
         "## Carpetas principales",
         "",
         "- `index.html`: app cliente autocontenida.",
+        "- `nuevo_expediente.html`: mesa de entrada para crear proyectos nuevos.",
         "- `documentos/`: Documento Ambiental y borradores disponibles.",
         "- `planos_mapas/`: mapas, planos y clima si existen en el expediente.",
         "- `data/`: contratos JSON para UI/API.",
@@ -519,6 +525,7 @@ def _app_manifest(
             "trazabilidad",
         ],
         "map_requirements": map_requirements,
+        "new_project_entrypoint": "nuevo_expediente.html",
         "artifacts": [artifact.to_dict() for artifact in artifacts],
     }
 
@@ -548,11 +555,13 @@ def build_client_app_package(
         map_requirements = _map_requirements_status(exp)
 
         _write_text(app_dir / "index.html", build_client_portal_html(portal))
+        _write_text(app_dir / "nuevo_expediente.html", build_new_project_app_html(form_schema, map_requirements))
         _write_text(app_dir / "README_CLIENTE.md", _readme_text(exp.name, portal.status, submission.status))
         _write_json(data_dir / "cliente_portal.json", portal.to_dict())
         _write_json(data_dir / "cliente_form_schema.json", form_schema.to_dict())
         _write_json(data_dir / "cliente_submission_validation.json", submission.to_dict())
         _write_json(data_dir / "map_requirements.json", {"maps": map_requirements})
+        _write_json(data_dir / "new_project_blueprint.json", build_new_project_blueprint(form_schema, map_requirements))
         _write_text(md_dir / "cliente_portal.md", build_client_portal_markdown(portal))
         _write_text(md_dir / "cliente_form_schema.md", build_client_form_schema_markdown(form_schema))
         _write_text(md_dir / "cliente_submission_validation.md", build_client_submission_validation_markdown(submission))
@@ -560,11 +569,13 @@ def build_client_app_package(
 
         base_specs = [
             ("APP-HTML", "App cliente HTML", app_dir / "index.html", "html", True),
+            ("APP-NEW-PROJECT", "App alta de nuevo expediente", app_dir / "nuevo_expediente.html", "html", True),
             ("APP-README", "Guia profesional cliente", app_dir / "README_CLIENTE.md", "markdown", True),
             ("APP-PORTAL", "Contrato portal JSON", data_dir / "cliente_portal.json", "json", True),
             ("APP-FORM", "Contrato formulario JSON", data_dir / "cliente_form_schema.json", "json", True),
             ("APP-VALIDATION", "Validacion entrega JSON", data_dir / "cliente_submission_validation.json", "json", True),
             ("APP-MAPS", "Catalogo cartografico profesional", data_dir / "map_requirements.json", "json", True),
+            ("APP-NEW-PROJECT-BLUEPRINT", "Contrato de alta de expedientes nuevos", data_dir / "new_project_blueprint.json", "json", True),
         ]
         artifacts.extend(
             _artifact(exp, path, artifact_id, label, kind, required)

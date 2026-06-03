@@ -179,6 +179,11 @@ def build_client_portal_html(portal: ClientPortal) -> str:
       color: white;
       border-color: var(--brand);
     }}
+    a.btn {{
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+    }}
     main {{
       max-width: 1180px;
       margin: 0 auto;
@@ -385,7 +390,8 @@ def build_client_portal_html(portal: ClientPortal) -> str:
     <h1>EIA-Agent | App de expediente ambiental</h1>
     <p>{_text(portal.expediente_id)}</p>
     <div class="toolbar">
-      <button class="btn light" data-scroll="nuevo-proyecto">Nuevo proyecto</button>
+      <a class="btn light" href="nuevo_expediente.html">Crear expediente nuevo</a>
+      <button class="btn" data-scroll="nuevo-proyecto">Ficha rapida</button>
       <button class="btn" data-scroll="entrada-cliente">Documentacion requerida</button>
       <button class="btn" data-scroll="artefactos">Documentos generados</button>
       <button class="btn" id="export-project-top">Exportar ficha JSON</button>
@@ -422,7 +428,8 @@ def build_client_portal_html(portal: ClientPortal) -> str:
     </section>
     <section class="band" id="nuevo-proyecto">
       <h2>Nuevo expediente ambiental</h2>
-      <p class="soft">Complete esta ficha para preparar un nuevo proyecto. La app genera un JSON descargable que sirve como entrada inicial para crear el expediente.</p>
+      <p class="soft">Use la app de nuevo expediente para preparar un proyecto completo. Esta ficha rapida genera un JSON descargable que sirve como entrada inicial si solo necesita registrar datos basicos.</p>
+      <p><a class="btn secondary" href="nuevo_expediente.html">Abrir app de nuevo expediente</a></p>
       <div class="form-grid">
         <label>Nombre del proyecto
           <input id="np-name" placeholder="Ej. Planta de valorizacion de residuos no peligrosos">
