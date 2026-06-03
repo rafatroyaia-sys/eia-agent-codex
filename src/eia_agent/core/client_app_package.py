@@ -9,6 +9,7 @@ No ejecuta fases tecnicas y no declara aptitud administrativa.
 from __future__ import annotations
 
 import json
+import re
 import shutil
 import zipfile
 from dataclasses import dataclass, field
@@ -57,6 +58,93 @@ GRAPHIC_DIRS: list[tuple[str, str]] = [
 ]
 
 _INTERNAL_FILE_SUFFIXES: tuple[str, ...] = (".py", ".pyc", ".pyo")
+
+PROFESSIONAL_MAP_REQUIREMENTS: list[dict[str, Any]] = [
+    {
+        "map_id": "MAP-001",
+        "title": "Situacion general",
+        "purpose": "Localizar el proyecto en la isla/municipio y contexto territorial.",
+        "required_layers": ["base territorial", "municipios", "marcador de proyecto"],
+        "priority": "ALTA",
+    },
+    {
+        "map_id": "MAP-002",
+        "title": "Emplazamiento y accesos",
+        "purpose": "Mostrar acceso viario, entorno inmediato y relacion con usos colindantes.",
+        "required_layers": ["ortofoto", "viario", "marcador de proyecto"],
+        "priority": "ALTA",
+    },
+    {
+        "map_id": "MAP-003",
+        "title": "Delimitacion de parcela en rojo",
+        "purpose": "Delimitar claramente la parcela/ambito de actuacion con perimetro rojo.",
+        "required_layers": ["catastro", "parcela", "perimetro rojo", "escala"],
+        "priority": "ALTA",
+    },
+    {
+        "map_id": "MAP-004",
+        "title": "Topografico y pendientes",
+        "purpose": "Caracterizar relieve, cotas, pendientes y drenaje superficial.",
+        "required_layers": ["MDT", "curvas de nivel", "pendientes", "drenaje"],
+        "priority": "ALTA",
+    },
+    {
+        "map_id": "MAP-005",
+        "title": "Ortofoto detalle",
+        "purpose": "Acreditar el estado fisico actual y ocupaciones del entorno cercano.",
+        "required_layers": ["PNOA/GRAFCAN", "parcela", "buffer 100-250 m"],
+        "priority": "ALTA",
+    },
+    {
+        "map_id": "MAP-006",
+        "title": "Usos del suelo y receptores sensibles",
+        "purpose": "Identificar viviendas, equipamientos, actividad industrial y receptores sensibles.",
+        "required_layers": ["usos del suelo", "receptores", "buffer 500 m"],
+        "priority": "ALTA",
+    },
+    {
+        "map_id": "MAP-007",
+        "title": "Ruido y receptores acusticos",
+        "purpose": "Ubicar focos, receptores, distancias y zonas potencialmente sensibles al ruido.",
+        "required_layers": ["focos de ruido", "receptores", "distancias", "pantallas/obstaculos"],
+        "priority": "ALTA",
+    },
+    {
+        "map_id": "MAP-008",
+        "title": "Red Natura 2000 y ENP",
+        "purpose": "Determinar relacion/distancias con espacios protegidos y zonas de sensibilidad.",
+        "required_layers": ["Red Natura 2000", "ENP", "parcela", "distancias"],
+        "priority": "ALTA",
+    },
+    {
+        "map_id": "MAP-009",
+        "title": "Hidrologia, drenaje e inundabilidad",
+        "purpose": "Evaluar cauces, escorrentia, zonas inundables y vector aguas pluviales.",
+        "required_layers": ["cauces", "drenaje", "inundabilidad", "parcela"],
+        "priority": "ALTA",
+    },
+    {
+        "map_id": "MAP-010",
+        "title": "Geologia, suelos y vulnerabilidad",
+        "purpose": "Aportar contexto de suelo, litologia y vulnerabilidad del medio fisico.",
+        "required_layers": ["geologia", "suelos", "vulnerabilidad", "parcela"],
+        "priority": "MEDIA",
+    },
+    {
+        "map_id": "MAP-011",
+        "title": "Paisaje y cuencas visuales",
+        "purpose": "Analizar exposicion visual y relacion con paisaje del entorno.",
+        "required_layers": ["puntos de observacion", "cuencas visuales", "ortofoto"],
+        "priority": "MEDIA",
+    },
+    {
+        "map_id": "MAP-012",
+        "title": "Sintesis ambiental",
+        "purpose": "Integrar condicionantes principales para conclusiones, medidas y PVA.",
+        "required_layers": ["condicionantes", "impactos", "medidas", "parcela"],
+        "priority": "MEDIA",
+    },
+]
 
 
 @dataclass
@@ -150,6 +238,21 @@ def _copy_file(exp: Path, app_dir: Path, source_rel: str, target_rel: str) -> Pa
     return target
 
 
+def _best_final_docx_source(exp: Path) -> str:
+    """Elige el DOCX mas completo para entregar como final revisable en la app."""
+    final_rel = "documento/documento_ambiental_final_revisable.docx"
+    figures_rel = "documento/documento_ambiental_borrador_con_figuras.docx"
+    base_rel = "documento/documento_ambiental_borrador.docx"
+    final_path = exp / final_rel
+    figures_path = exp / figures_rel
+    if figures_path.exists():
+        if not final_path.exists() or figures_path.stat().st_mtime >= final_path.stat().st_mtime:
+            return figures_rel
+    if final_path.exists():
+        return final_rel
+    return base_rel
+
+
 def _copy_dir(exp: Path, app_dir: Path, source_rel: str, target_rel: str) -> list[Path]:
     source = exp / source_rel
     target = app_dir / target_rel
@@ -176,6 +279,159 @@ def _zip_dir(source_dir: Path, zip_path: Path) -> None:
         for path in sorted(source_dir.rglob("*")):
             if path.is_file():
                 zf.write(path, path.relative_to(source_dir))
+
+
+def _ensure_climogram_from_description(exp: Path) -> Path | None:
+    """Genera clima/climograma.png si hay tabla mensual en descripcion_clima.md."""
+    output = exp / "clima" / "climograma.png"
+    if output.exists() and output.stat().st_size > 0:
+        return output
+    description = exp / "clima" / "descripcion_clima.md"
+    if not description.exists():
+        return None
+    text = description.read_text(encoding="utf-8", errors="ignore")
+    rows = re.findall(
+        r"\|\s*(Enero|Febrero|Marzo|Abril|Mayo|Junio|Julio|Agosto|Septiembre|Octubre|Noviembre|Diciembre)\s*"
+        r"\|\s*([\d.,]+)\s*\|\s*[\d.,]+\s*\|\s*[\d.,]+\s*\|\s*([\d.,]+)\s*\|",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if len(rows) != 12:
+        return None
+    temperatures = [float(t.replace(",", ".")) for _, t, _ in rows]
+    precipitations = [float(p.replace(",", ".")) for _, _, p in rows]
+    try:
+        from eia_agent.core.climate_indices import MonthlyClimateData
+        from eia_agent.core.climogram_generator import ClimogramConfig, generate_climogram
+
+        data = MonthlyClimateData(
+            temperatures_c=temperatures,
+            precipitations_mm=precipitations,
+            station_id="C029O",
+            station_name="Lanzarote Aeropuerto",
+            period="1981-2010",
+        )
+        config = ClimogramConfig(
+            title="Climograma - Lanzarote Aeropuerto",
+            subtitle="Temperatura media y precipitacion mensual. Periodo normal 1981-2010",
+            width_inches=10.5,
+            height_inches=6.2,
+            dpi=170,
+        )
+        result = generate_climogram(data, output, config=config)
+        return Path(result.output_path)
+    except Exception:
+        try:
+            _generate_climogram_with_pillow(temperatures, precipitations, output)
+            return output if output.exists() else None
+        except Exception:
+            return None
+
+
+def _generate_climogram_with_pillow(temperatures: list[float], precipitations: list[float], output: Path) -> None:
+    """Fallback visual sin matplotlib: barras P, curva T y meses secos."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    output.parent.mkdir(parents=True, exist_ok=True)
+    width, height = 1500, 900
+    margin_l, margin_r, margin_t, margin_b = 120, 110, 115, 115
+    plot_w = width - margin_l - margin_r
+    plot_h = height - margin_t - margin_b
+    img = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype("arial.ttf", 28)
+        font_small = ImageFont.truetype("arial.ttf", 22)
+        font_title = ImageFont.truetype("arialbd.ttf", 36)
+    except Exception:
+        font = ImageFont.load_default()
+        font_small = ImageFont.load_default()
+        font_title = ImageFont.load_default()
+
+    months = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
+    max_p = max(max(precipitations) * 1.25, 30.0)
+    min_t = min(temperatures)
+    max_t = max(temperatures)
+    pad_t = max((max_t - min_t) * 0.35, 3.0)
+    t_min = min_t - pad_t
+    t_max = max_t + pad_t
+
+    def x_at(i: int) -> float:
+        return margin_l + (i + 0.5) * plot_w / 12
+
+    def y_p(value: float) -> float:
+        return margin_t + plot_h - (value / max_p) * plot_h
+
+    def y_t(value: float) -> float:
+        return margin_t + plot_h - ((value - t_min) / (t_max - t_min)) * plot_h
+
+    draw.text((margin_l, 28), "Climograma - Lanzarote Aeropuerto", fill="#16202a", font=font_title)
+    draw.text((margin_l, 72), "Temperatura media y precipitacion mensual. Periodo normal 1981-2010", fill="#667085", font=font_small)
+    draw.rectangle([margin_l, margin_t, width - margin_r, height - margin_b], outline="#b8c2cc", width=2)
+
+    for step in range(0, 6):
+        p_val = max_p * step / 5
+        y = y_p(p_val)
+        draw.line([margin_l, y, width - margin_r, y], fill="#edf1f5", width=1)
+        draw.text((35, y - 12), f"{p_val:.0f}", fill="#1f77b4", font=font_small)
+
+    bar_w = plot_w / 18
+    temp_points: list[tuple[float, float]] = []
+    for i, (temp, prec) in enumerate(zip(temperatures, precipitations)):
+        x = x_at(i)
+        if prec < 2 * temp:
+            draw.rectangle([x - plot_w / 24, margin_t, x + plot_w / 24, height - margin_b], fill="#fff6df")
+        draw.rectangle([x - bar_w / 2, y_p(prec), x + bar_w / 2, height - margin_b], fill="#2f80ed")
+        temp_points.append((x, y_t(temp)))
+        draw.text((x - 18, height - margin_b + 28), months[i], fill="#344054", font=font_small)
+
+    if len(temp_points) > 1:
+        draw.line(temp_points, fill="#d62728", width=5, joint="curve")
+    for x, y in temp_points:
+        draw.ellipse([x - 7, y - 7, x + 7, y + 7], fill="#d62728", outline="white", width=2)
+
+    draw.text((margin_l, height - 58), f"T media anual: {sum(temperatures)/12:.1f} C", fill="#d62728", font=font)
+    draw.text((margin_l + 360, height - 58), f"P anual: {sum(precipitations):.0f} mm", fill="#1f77b4", font=font)
+    draw.text((width - 430, height - 58), "Sombreado: meses secos Gaussen", fill="#9a5b00", font=font_small)
+    draw.text((35, margin_t + 8), "P (mm)", fill="#1f77b4", font=font_small)
+    draw.text((width - 100, margin_t + 8), "T (C)", fill="#d62728", font=font_small)
+    img.save(output, format="PNG")
+
+
+def _map_requirements_status(exp: Path) -> list[dict[str, Any]]:
+    files = [p.name.lower() for folder in [exp / "mapas", exp / "cartografia" / "mapas"] if folder.exists() for p in folder.glob("*.png")]
+    enriched: list[dict[str, Any]] = []
+    for req in PROFESSIONAL_MAP_REQUIREMENTS:
+        map_id = req["map_id"].lower()
+        available = any(name.startswith(map_id.lower()) for name in files)
+        item = dict(req)
+        item["status"] = "DISPONIBLE" if available else "PENDIENTE"
+        item["available"] = available
+        enriched.append(item)
+    return enriched
+
+
+def _map_requirements_markdown(items: list[dict[str, Any]]) -> str:
+    lines = [
+        "# Cartografia profesional requerida",
+        "",
+        "Catalogo de mapas y planos que debe revisar o completar el expediente antes de considerarse preparado.",
+        "",
+        "| ID | Prioridad | Estado | Mapa/plano | Finalidad | Capas minimas |",
+        "|----|-----------|--------|------------|-----------|---------------|",
+    ]
+    for item in items:
+        layers = ", ".join(item.get("required_layers", []))
+        lines.append(
+            f"| {item['map_id']} | {item['priority']} | {item['status']} | "
+            f"{item['title']} | {item['purpose']} | {layers} |"
+        )
+    lines.extend([
+        "",
+        "Nota: la delimitacion de parcela debe representarse con perimetro rojo claramente visible.",
+        "Los mapas oficiales deben mantener fuente, fecha, escala, norte, sistema de referencia y trazabilidad.",
+    ])
+    return "\n".join(lines)
 
 
 def _readme_text(expediente_id: str, portal_status: str, submission_status: str) -> str:
@@ -215,7 +471,13 @@ def _readme_text(expediente_id: str, portal_status: str, submission_status: str)
     ])
 
 
-def _app_manifest(expediente_id: str, portal_status: str, submission_status: str, artifacts: list[ClientAppArtifact]) -> dict[str, Any]:
+def _app_manifest(
+    expediente_id: str,
+    portal_status: str,
+    submission_status: str,
+    artifacts: list[ClientAppArtifact],
+    map_requirements: list[dict[str, Any]],
+) -> dict[str, Any]:
     return {
         "app_name": "EIA-Agent Cliente",
         "expediente_id": expediente_id,
@@ -256,6 +518,7 @@ def _app_manifest(expediente_id: str, portal_status: str, submission_status: str
             "pva",
             "trazabilidad",
         ],
+        "map_requirements": map_requirements,
         "artifacts": [artifact.to_dict() for artifact in artifacts],
     }
 
@@ -281,15 +544,19 @@ def build_client_app_package(
             shutil.rmtree(app_dir)
         data_dir = app_dir / "data"
         md_dir = app_dir / "markdown"
+        _ensure_climogram_from_description(exp)
+        map_requirements = _map_requirements_status(exp)
 
         _write_text(app_dir / "index.html", build_client_portal_html(portal))
         _write_text(app_dir / "README_CLIENTE.md", _readme_text(exp.name, portal.status, submission.status))
         _write_json(data_dir / "cliente_portal.json", portal.to_dict())
         _write_json(data_dir / "cliente_form_schema.json", form_schema.to_dict())
         _write_json(data_dir / "cliente_submission_validation.json", submission.to_dict())
+        _write_json(data_dir / "map_requirements.json", {"maps": map_requirements})
         _write_text(md_dir / "cliente_portal.md", build_client_portal_markdown(portal))
         _write_text(md_dir / "cliente_form_schema.md", build_client_form_schema_markdown(form_schema))
         _write_text(md_dir / "cliente_submission_validation.md", build_client_submission_validation_markdown(submission))
+        _write_text(md_dir / "map_requirements.md", _map_requirements_markdown(map_requirements))
 
         base_specs = [
             ("APP-HTML", "App cliente HTML", app_dir / "index.html", "html", True),
@@ -297,6 +564,7 @@ def build_client_app_package(
             ("APP-PORTAL", "Contrato portal JSON", data_dir / "cliente_portal.json", "json", True),
             ("APP-FORM", "Contrato formulario JSON", data_dir / "cliente_form_schema.json", "json", True),
             ("APP-VALIDATION", "Validacion entrega JSON", data_dir / "cliente_submission_validation.json", "json", True),
+            ("APP-MAPS", "Catalogo cartografico profesional", data_dir / "map_requirements.json", "json", True),
         ]
         artifacts.extend(
             _artifact(exp, path, artifact_id, label, kind, required)
@@ -304,6 +572,8 @@ def build_client_app_package(
         )
 
         for source_rel, target_rel in DOCUMENT_ARTIFACTS:
+            if target_rel == "documentos/documento_ambiental_final_revisable.docx":
+                source_rel = _best_final_docx_source(exp)
             copied = _copy_file(exp, app_dir, source_rel, target_rel)
             if copied is None:
                 missing_document_artifacts.append(source_rel)
@@ -315,7 +585,7 @@ def build_client_app_package(
             for copied in copied_files:
                 artifacts.append(_artifact(exp, copied, "APP-GRAPHIC", f"Recurso grafico: {copied.name}", "asset", False))
 
-        _write_json(data_dir / "app_manifest.json", _app_manifest(exp.name, portal.status, submission.status, artifacts))
+        _write_json(data_dir / "app_manifest.json", _app_manifest(exp.name, portal.status, submission.status, artifacts, map_requirements))
         artifacts.append(_artifact(exp, data_dir / "app_manifest.json", "APP-MANIFEST", "Manifest app cliente", "json", True))
         _zip_dir(app_dir, zip_path)
         artifacts.append(_artifact(exp, zip_path, "APP-ZIP", "ZIP app cliente", "zip", True))

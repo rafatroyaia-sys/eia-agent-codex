@@ -2,9 +2,11 @@
 Tests para client_app_package.
 """
 import json
+import os
 import shutil
 import sys
 import tempfile
+import time
 import unittest
 import zipfile
 from pathlib import Path
@@ -72,8 +74,11 @@ class TestClientAppPackage(unittest.TestCase):
         self.assertTrue((app_dir / "index.html").exists())
         self.assertTrue((app_dir / "README_CLIENTE.md").exists())
         self.assertTrue((app_dir / "data" / "app_manifest.json").exists())
+        self.assertTrue((app_dir / "data" / "map_requirements.json").exists())
+        self.assertTrue((app_dir / "markdown" / "map_requirements.md").exists())
         self.assertTrue((app_dir / "documentos" / "documento_ambiental.docx").exists())
         self.assertTrue((app_dir / "planos_mapas" / "mapas" / "mapa_localizacion.png").exists())
+        self.assertTrue((app_dir / "planos_mapas" / "clima" / "climograma.png").exists())
         self.assertTrue(zip_path.exists())
 
     def test_manifest_describes_real_app_workflow(self):
@@ -86,6 +91,8 @@ class TestClientAppPackage(unittest.TestCase):
         self.assertEqual(manifest["app_name"], "EIA-Agent Cliente")
         self.assertIn("redaccion_documento_ambiental", manifest["workflow"])
         self.assertIn("mapas_planos", manifest["expected_outputs"])
+        self.assertGreaterEqual(len(manifest["map_requirements"]), 12)
+        self.assertTrue(any(item["title"] == "Ruido y receptores acusticos" for item in manifest["map_requirements"]))
         self.assertFalse(manifest["administrative_ready"])
 
     def test_zip_contains_app_and_document_entrypoints(self):
@@ -100,6 +107,7 @@ class TestClientAppPackage(unittest.TestCase):
         self.assertIn("index.html", names)
         self.assertIn("README_CLIENTE.md", names)
         self.assertIn("data/app_manifest.json", names)
+        self.assertIn("data/map_requirements.json", names)
         self.assertIn("documentos/documento_ambiental.docx", names)
         self.assertIn("planos_mapas/clima/climograma.png", names)
 
@@ -114,6 +122,46 @@ class TestClientAppPackage(unittest.TestCase):
             names = set(zf.namelist())
 
         self.assertNotIn("planos_mapas/mapas/generar_mapas.py", names)
+
+    def test_generates_climogram_from_description_when_png_missing(self):
+        self._write_minimal_inputs()
+        (self.exp / "clima" / "climograma.png").unlink()
+        _write_file(self.exp / "clima" / "descripcion_clima.md", """\
+| Mes | T media (degC) | T max media (degC) | T min media (degC) | P (mm) |
+|-----|---------------|-------------------|-------------------|--------|
+| Enero | 17.4 | 20.7 | 14.0 | 16 |
+| Febrero | 17.9 | 21.3 | 14.3 | 18 |
+| Marzo | 19.0 | 22.9 | 15.0 | 12 |
+| Abril | 19.6 | 23.5 | 15.7 | 5 |
+| Mayo | 20.8 | 24.6 | 16.8 | 2 |
+| Junio | 22.6 | 26.3 | 18.8 | 0 |
+| Julio | 24.3 | 28.2 | 20.4 | 0 |
+| Agosto | 25.2 | 29.1 | 21.2 | 0 |
+| Septiembre | 24.7 | 28.6 | 20.8 | 2 |
+| Octubre | 23.0 | 26.7 | 19.4 | 10 |
+| Noviembre | 20.7 | 24.2 | 17.2 | 15 |
+| Diciembre | 18.6 | 21.8 | 15.4 | 29 |
+""")
+
+        build_client_app_package(self.exp, write_outputs=True)
+
+        self.assertTrue((self.exp / "clima" / "climograma.png").exists())
+        self.assertGreater((self.exp / "clima" / "climograma.png").stat().st_size, 1000)
+
+    def test_final_revisable_uses_newer_figures_docx(self):
+        self._write_minimal_inputs()
+        final = self.exp / "documento" / "documento_ambiental_final_revisable.docx"
+        figures = self.exp / "documento" / "documento_ambiental_borrador_con_figuras.docx"
+        _write_file(final, "version antigua")
+        time.sleep(0.01)
+        _write_file(figures, "version con figuras nueva")
+        now = time.time()
+        os.utime(figures, (now, now))
+
+        build_client_app_package(self.exp, write_outputs=True)
+
+        packaged = self.exp / "documento" / "cliente_app" / "documentos" / "documento_ambiental_final_revisable.docx"
+        self.assertEqual(packaged.read_text(encoding="utf-8"), "version con figuras nueva")
 
 
 if __name__ == "__main__":

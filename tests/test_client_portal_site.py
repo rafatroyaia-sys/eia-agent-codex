@@ -62,6 +62,9 @@ class TestClientPortalSite(unittest.TestCase):
         self.assertIn("Entrada cliente", html)
         self.assertIn("Siguientes pasos", html)
         self.assertIn("Artefactos", html)
+        self.assertIn("Nuevo expediente ambiental", html)
+        self.assertIn("Exportar ficha de nuevo expediente", html)
+        self.assertIn("Mapas, planos y climograma", html)
         self.assertIn("administrative_ready: false", html)
 
     def test_build_html_escapes_text(self):

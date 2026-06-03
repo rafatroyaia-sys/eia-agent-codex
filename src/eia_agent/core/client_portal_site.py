@@ -154,10 +154,55 @@ def build_client_portal_html(portal: ClientPortal) -> str:
       letter-spacing: 0;
     }}
     header p {{ margin: 0; max-width: 980px; color: #d9eef4; }}
+    .toolbar {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 18px;
+    }}
+    .btn {{
+      border: 1px solid rgba(255,255,255,.28);
+      background: rgba(255,255,255,.12);
+      color: white;
+      border-radius: 6px;
+      padding: 9px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }}
+    .btn.light {{
+      background: white;
+      color: #0f2f3a;
+      border-color: white;
+    }}
+    .btn.secondary {{
+      background: var(--brand);
+      color: white;
+      border-color: var(--brand);
+    }}
     main {{
       max-width: 1180px;
       margin: 0 auto;
       padding: 24px;
+    }}
+    .tabs {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-bottom: 18px;
+    }}
+    .tab {{
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      border-radius: 6px;
+      padding: 9px 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }}
+    .tab.active {{
+      background: var(--brand);
+      border-color: var(--brand);
+      color: white;
     }}
     .grid {{
       display: grid;
@@ -228,6 +273,29 @@ def build_client_portal_html(portal: ClientPortal) -> str:
       border-collapse: collapse;
       font-size: 14px;
     }}
+    .form-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    label {{
+      display: grid;
+      gap: 6px;
+      color: var(--soft);
+      font-size: 13px;
+      font-weight: 700;
+    }}
+    input, textarea, select {{
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 10px;
+      font: inherit;
+      color: var(--ink);
+      background: white;
+    }}
+    textarea {{ min-height: 92px; resize: vertical; }}
+    .span-2 {{ grid-column: 1 / -1; }}
     th, td {{
       border-bottom: 1px solid var(--line);
       text-align: left;
@@ -305,7 +373,8 @@ def build_client_portal_html(portal: ClientPortal) -> str:
       font-size: 13px;
     }}
     @media (max-width: 900px) {{
-      .hero, .grid, .steps, .artifacts {{ grid-template-columns: 1fr; }}
+      .hero, .grid, .steps, .artifacts, .form-grid {{ grid-template-columns: 1fr; }}
+      .span-2 {{ grid-column: auto; }}
       header {{ padding: 22px 20px; }}
       main {{ padding: 16px; }}
     }}
@@ -315,10 +384,23 @@ def build_client_portal_html(portal: ClientPortal) -> str:
   <header>
     <h1>EIA-Agent | App de expediente ambiental</h1>
     <p>{_text(portal.expediente_id)}</p>
+    <div class="toolbar">
+      <button class="btn light" data-scroll="nuevo-proyecto">Nuevo proyecto</button>
+      <button class="btn" data-scroll="entrada-cliente">Documentacion requerida</button>
+      <button class="btn" data-scroll="artefactos">Documentos generados</button>
+      <button class="btn" id="export-project-top">Exportar ficha JSON</button>
+    </div>
   </header>
   <main>
+    <nav class="tabs" aria-label="Secciones de la app">
+      <button class="tab active" data-scroll="estado">Estado</button>
+      <button class="tab" data-scroll="nuevo-proyecto">Nuevo expediente</button>
+      <button class="tab" data-scroll="entrada-cliente">Inputs</button>
+      <button class="tab" data-scroll="mapas-clima">Mapas y clima</button>
+      <button class="tab" data-scroll="artefactos">Salida documental</button>
+    </nav>
     <section class="hero">
-      <div class="band">
+      <div class="band" id="estado">
         <span class="status {status_cls}">{_text(portal.status)}</span>
         <h2>Lectura ejecutiva</h2>
         <p>{_text(portal.headline)}</p>
@@ -338,7 +420,44 @@ def build_client_portal_html(portal: ClientPortal) -> str:
       <div class="card"><h2>Artefactos</h2><div class="metric">{available}/{len(portal.artifacts)}</div></div>
       <div class="card"><h2>Listo inicial</h2><div class="metric">{_text(str(portal.intake.get('ready_for_initial_processing', False)))}</div></div>
     </section>
-    <section class="band">
+    <section class="band" id="nuevo-proyecto">
+      <h2>Nuevo expediente ambiental</h2>
+      <p class="soft">Complete esta ficha para preparar un nuevo proyecto. La app genera un JSON descargable que sirve como entrada inicial para crear el expediente.</p>
+      <div class="form-grid">
+        <label>Nombre del proyecto
+          <input id="np-name" placeholder="Ej. Planta de valorizacion de residuos no peligrosos">
+        </label>
+        <label>Promotor
+          <input id="np-promoter" placeholder="Razon social / titular">
+        </label>
+        <label>Coordenadas WGS84
+          <input id="np-coords" placeholder="28.0000, -16.0000">
+        </label>
+        <label>Referencia catastral
+          <input id="np-cadastre" placeholder="Referencia catastral">
+        </label>
+        <label>Tipo de actividad
+          <select id="np-activity">
+            <option>Gestion de residuos</option>
+            <option>Actividad industrial</option>
+            <option>Infraestructura</option>
+            <option>Otra actividad sometida a evaluacion ambiental</option>
+          </select>
+        </label>
+        <label>Isla / municipio
+          <input id="np-location" placeholder="Municipio, isla">
+        </label>
+        <label class="span-2">Descripcion breve
+          <textarea id="np-description" placeholder="Objeto, operaciones previstas, capacidad, superficies, accesos, emisiones, fotos y planos disponibles"></textarea>
+        </label>
+        <label class="span-2">Archivos a preparar
+          <input id="np-files" type="file" multiple>
+        </label>
+      </div>
+      <p class="soft" id="np-file-summary">Ningun archivo seleccionado.</p>
+      <button class="btn secondary" id="export-project">Exportar ficha de nuevo expediente</button>
+    </section>
+    <section class="band" id="entrada-cliente">
       <h2>Entrada cliente</h2>
       <table>
         <thead>
@@ -349,13 +468,23 @@ def build_client_portal_html(portal: ClientPortal) -> str:
         </tbody>
       </table>
     </section>
+    <section class="band" id="mapas-clima">
+      <h2>Mapas, planos y climograma</h2>
+      <p>La salida profesional debe incluir, como minimo operativo, localizacion, delimitacion de parcela en rojo, topografico, ortofoto, usos/receptores, ruido, Red Natura/ENP, hidrologia-inundabilidad y climograma mensual a color.</p>
+      <div class="steps">
+        <article class="step"><span class="step-order">M</span><div><strong>Mapas oficiales</strong><p>Fuente, fecha, escala, norte, sistema de referencia y trazabilidad cartografica.</p></div></article>
+        <article class="step"><span class="step-order">P</span><div><strong>Parcela en rojo</strong><p>Ambito de actuacion claramente delimitado sobre ortofoto/catastro.</p></div></article>
+        <article class="step"><span class="step-order">R</span><div><strong>Ruido</strong><p>Focos, receptores sensibles, distancias y condicionantes acusticos.</p></div></article>
+        <article class="step"><span class="step-order">C</span><div><strong>Climograma</strong><p>Barras de precipitacion, curva de temperatura, meses secos y periodo de referencia.</p></div></article>
+      </div>
+    </section>
     <section class="band">
       <h2>Siguientes pasos</h2>
       <div class="steps">
         {_render_steps(portal)}
       </div>
     </section>
-    <section class="band">
+    <section class="band" id="artefactos">
       <h2>Artefactos</h2>
       <ul class="artifacts">
         {_render_artifacts(portal)}
@@ -364,6 +493,55 @@ def build_client_portal_html(portal: ClientPortal) -> str:
     {_render_warnings(portal)}
   </main>
   <footer>{_text(DISCLAIMER)}</footer>
+  <script>
+    const scrollButtons = document.querySelectorAll('[data-scroll]');
+    scrollButtons.forEach((btn) => {{
+      btn.addEventListener('click', () => {{
+        document.querySelectorAll('.tab').forEach((tab) => tab.classList.remove('active'));
+        if (btn.classList.contains('tab')) btn.classList.add('active');
+        const target = document.getElementById(btn.dataset.scroll);
+        if (target) target.scrollIntoView({{ behavior: 'smooth', block: 'start' }});
+      }});
+    }});
+    const fileInput = document.getElementById('np-files');
+    const fileSummary = document.getElementById('np-file-summary');
+    if (fileInput && fileSummary) {{
+      fileInput.addEventListener('change', () => {{
+        const files = Array.from(fileInput.files || []);
+        fileSummary.textContent = files.length
+          ? files.map((f) => `${{f.name}} (${{Math.round(f.size / 1024)}} KB)`).join(' | ')
+          : 'Ningun archivo seleccionado.';
+      }});
+    }}
+    function exportProjectJson() {{
+      const files = Array.from((document.getElementById('np-files') || {{ files: [] }}).files || []);
+      const data = {{
+        app: 'EIA-Agent Cliente',
+        created_at: new Date().toISOString(),
+        project_name: document.getElementById('np-name')?.value || '',
+        promoter: document.getElementById('np-promoter')?.value || '',
+        coordinates_wgs84: document.getElementById('np-coords')?.value || '',
+        cadastre_reference: document.getElementById('np-cadastre')?.value || '',
+        activity_type: document.getElementById('np-activity')?.value || '',
+        location: document.getElementById('np-location')?.value || '',
+        description: document.getElementById('np-description')?.value || '',
+        selected_files: files.map((f) => ({{ name: f.name, size_bytes: f.size, type: f.type || 'unknown' }})),
+        next_step: 'Crear expediente y copiar estos archivos en inputs/'
+      }};
+      const blob = new Blob([JSON.stringify(data, null, 2)], {{ type: 'application/json' }});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const safeName = (data.project_name || 'nuevo_expediente').toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+      a.href = url;
+      a.download = `${{safeName || 'nuevo_expediente'}}_entrada_cliente.json`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }}
+    document.getElementById('export-project')?.addEventListener('click', exportProjectJson);
+    document.getElementById('export-project-top')?.addEventListener('click', exportProjectJson);
+  </script>
 </body>
 </html>
 """
