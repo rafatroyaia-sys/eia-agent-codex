@@ -33,6 +33,11 @@ El ZIP es portable para un equipo Windows:
 1. Descomprimir `eia_agent_cliente_app.zip`.
 2. Ejecutar `INICIAR_APP_WINDOWS.bat`.
 3. Usar la app en `http://127.0.0.1:8765/`.
+4. Mantener abierta la ventana del servidor mientras se utiliza la app.
+
+La URL local no funciona si se abre sin ejecutar antes
+`INICIAR_APP_WINDOWS.bat`. El lanzador detecta `python`, `py` o el runtime
+interno de Codex disponible en el equipo.
 
 El paquete incluye:
 

@@ -135,7 +135,9 @@ class TestClientAppPackage(unittest.TestCase):
         deploy = (app_dir / "DEPLOY_PROVISIONAL.md").read_text(encoding="utf-8")
 
         self.assertIn("http://127.0.0.1:8765/", launcher)
-        self.assertIn("python server\\eia_client_server.py", launcher)
+        self.assertIn("Mantenga esta ventana abierta", launcher)
+        self.assertIn("codex-runtimes", launcher)
+        self.assertIn("server\\eia_client_server.py", launcher)
         self.assertIn("/api/projects", server)
         self.assertIn("expedientes_cliente", server)
         self.assertIn("Uso en el ordenador del cliente", deploy)
