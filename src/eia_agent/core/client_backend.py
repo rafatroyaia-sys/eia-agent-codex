@@ -8,12 +8,15 @@ No ejecuta automaticamente fases tecnicas ni declara aptitud administrativa.
 """
 from __future__ import annotations
 
-import cgi
 import json
 import mimetypes
+import os
 import re
+import secrets
 import shutil
 from dataclasses import dataclass, field
+from email import policy
+from email.parser import BytesParser
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -43,6 +46,8 @@ UPLOAD_TARGETS: dict[str, str] = {
     "MEDIA-001": "inputs/fotos",
     "CART-001": "inputs/cartografia_aportada",
 }
+
+MAX_UPLOAD_REQUEST_BYTES = 100 * 1024 * 1024
 
 
 @dataclass
@@ -92,6 +97,38 @@ def _safe_filename(name: str) -> str:
     cleaned = Path(name or "archivo").name
     cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", cleaned).strip("._")
     return cleaned or "archivo"
+
+
+def parse_multipart_form(
+    content_type: str,
+    body: bytes,
+) -> tuple[dict[str, str], list[dict[str, Any]]]:
+    """Parsea multipart/form-data sin depender del modulo cgi eliminado en Python 3.13."""
+    if not content_type.lower().startswith("multipart/form-data"):
+        raise ValueError("Content-Type multipart/form-data requerido")
+    message = BytesParser(policy=policy.default).parsebytes(
+        b"Content-Type: " + content_type.encode("utf-8") + b"\r\n"
+        b"MIME-Version: 1.0\r\n\r\n" + body
+    )
+    fields: dict[str, str] = {}
+    files: list[dict[str, Any]] = []
+    if not message.is_multipart():
+        raise ValueError("Formulario multipart no valido")
+    for part in message.iter_parts():
+        field_name = part.get_param("name", header="content-disposition")
+        filename = part.get_filename()
+        payload = part.get_payload(decode=True) or b""
+        if filename:
+            files.append({
+                "field_name": str(field_name or "file"),
+                "filename": filename,
+                "content": payload,
+                "content_type": part.get_content_type() or "application/octet-stream",
+            })
+        elif field_name:
+            charset = part.get_content_charset() or "utf-8"
+            fields[str(field_name)] = payload.decode(charset, errors="replace")
+    return fields, files
 
 
 def _project_name(payload: dict[str, Any]) -> str:
@@ -282,6 +319,7 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
 
     workspace: Path
     static_dir: Path
+    access_token: str = ""
 
     def _send_json(self, data: dict[str, Any], status: int = 200) -> None:
         body = json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
@@ -289,7 +327,7 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, X-EIA-Key")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.end_headers()
         self.wfile.write(body)
@@ -298,6 +336,18 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0") or "0")
         raw = self.rfile.read(length) if length else b"{}"
         return json.loads(raw.decode("utf-8"))
+
+    def _authorized(self) -> bool:
+        if not self.access_token:
+            return True
+        supplied = self.headers.get("X-EIA-Key", "")
+        return secrets.compare_digest(supplied, self.access_token)
+
+    def _require_authorized(self) -> bool:
+        if self._authorized():
+            return True
+        self._send_json({"error": "Clave de acceso no valida"}, status=HTTPStatus.UNAUTHORIZED)
+        return False
 
     def do_OPTIONS(self) -> None:  # noqa: N802
         self._send_json({"ok": True})
@@ -313,6 +363,8 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
             })
             return
         if parsed.path == "/api/projects":
+            if not self._require_authorized():
+                return
             self._send_json({"projects": list_backend_projects(self.workspace), "administrative_ready": False})
             return
         return super().do_GET()
@@ -320,6 +372,8 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
         try:
+            if not self._require_authorized():
+                return
             if parsed.path == "/api/projects":
                 payload = self._read_json_body()
                 project = create_project_from_payload(self.workspace, payload)
@@ -339,17 +393,26 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
             self._send_json({"error": str(exc), "administrative_ready": False}, status=HTTPStatus.BAD_REQUEST)
 
     def _handle_upload(self, project_id: str) -> None:
-        form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={
-            "REQUEST_METHOD": "POST",
-            "CONTENT_TYPE": self.headers.get("Content-Type", ""),
-        })
-        control_id = str(form.getfirst("control_id") or "DOC-001")
-        file_item = form["file"] if "file" in form else None
-        if file_item is None or not getattr(file_item, "filename", ""):
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length <= 0 or length > MAX_UPLOAD_REQUEST_BYTES:
+            raise ValueError("Tamano de subida no permitido")
+        fields, files = parse_multipart_form(
+            self.headers.get("Content-Type", ""),
+            self.rfile.read(length),
+        )
+        control_id = str(fields.get("control_id") or "DOC-001")
+        file_item = next((item for item in files if item["field_name"] == "file"), None)
+        if file_item is None:
             raise ValueError("No se recibio archivo")
-        content = file_item.file.read()
-        content_type = getattr(file_item, "type", None) or mimetypes.guess_type(file_item.filename)[0] or "application/octet-stream"
-        saved = save_project_upload(self.workspace, project_id, control_id, file_item.filename, content, content_type)
+        content_type = file_item["content_type"] or mimetypes.guess_type(file_item["filename"])[0] or "application/octet-stream"
+        saved = save_project_upload(
+            self.workspace,
+            project_id,
+            control_id,
+            file_item["filename"],
+            file_item["content"],
+            content_type,
+        )
         self._send_json({"file": saved.to_dict(), "administrative_ready": False}, status=HTTPStatus.CREATED)
 
     def translate_path(self, path: str) -> str:
@@ -364,14 +427,20 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
         return str(candidate)
 
 
-def build_backend_handler(workspace: str | Path, static_dir: str | Path) -> type[ClientBackendHandler]:
+def build_backend_handler(
+    workspace: str | Path,
+    static_dir: str | Path,
+    access_token: str | None = None,
+) -> type[ClientBackendHandler]:
     """Crea una clase handler parametrizada con workspace y carpeta estatica."""
     workspace_path = Path(workspace).resolve()
     static_path = Path(static_dir).resolve()
+    token_value = access_token or os.getenv("EIA_ACCESS_TOKEN", "")
 
     class BoundClientBackendHandler(ClientBackendHandler):
         workspace = workspace_path
         static_dir = static_path
+        access_token = token_value
 
     return BoundClientBackendHandler
 
@@ -381,12 +450,13 @@ def serve_client_backend(
     static_dir: str | Path,
     host: str = "127.0.0.1",
     port: int = CLIENT_BACKEND_PORT,
+    access_token: str | None = None,
 ) -> ThreadingHTTPServer:
     """Arranca el servidor HTTP bloqueante para la app cliente."""
     static_path = Path(static_dir).resolve()
     if not static_path.exists():
         raise FileNotFoundError(f"No existe la carpeta estatica: {static_path}")
-    handler = build_backend_handler(workspace, static_path)
+    handler = build_backend_handler(workspace, static_path, access_token=access_token)
     server = ThreadingHTTPServer((host, port), handler)
     print(f"EIA-Agent Client Backend: http://{host}:{port}/")
     print(f"Workspace: {Path(workspace).resolve()}")

@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: eia-agent-cliente
+    runtime: docker
+    plan: starter
+    autoDeploy: true
+    healthCheckPath: /api/health
+    envVars:
+      - key: EIA_DATA_DIR
+        value: /var/data
+      - key: EIA_ACCESS_TOKEN
+        sync: false
+    disk:
+      name: eia-agent-data
+      mountPath: /var/data
+      sizeGB: 1

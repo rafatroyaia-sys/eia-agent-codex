@@ -232,10 +232,11 @@ No genera por si solo aptitud administrativa.
 """
 from __future__ import annotations
 
-import cgi
 import json
 import mimetypes
 import re
+from email import policy
+from email.parser import BytesParser
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -286,6 +287,29 @@ def safe_filename(value: str) -> str:
     name = Path(value or "archivo").name
     name = re.sub(r"[^A-Za-z0-9._-]+", "_", name).strip("._")
     return name or "archivo"
+
+
+def parse_multipart(content_type: str, body: bytes):
+    message = BytesParser(policy=policy.default).parsebytes(
+        b"Content-Type: " + content_type.encode("utf-8") + b"\r\n"
+        b"MIME-Version: 1.0\r\n\r\n" + body
+    )
+    fields = {}
+    files = []
+    for part in message.iter_parts():
+        field_name = part.get_param("name", header="content-disposition")
+        filename = part.get_filename()
+        payload = part.get_payload(decode=True) or b""
+        if filename:
+            files.append({
+                "field_name": str(field_name or "file"),
+                "filename": filename,
+                "content": payload,
+                "content_type": part.get_content_type() or "application/octet-stream",
+            })
+        elif field_name:
+            fields[str(field_name)] = payload.decode(part.get_content_charset() or "utf-8", errors="replace")
+    return fields, files
 
 
 def project_name(payload: dict) -> str:
@@ -394,17 +418,17 @@ class Handler(SimpleHTTPRequestHandler):
                 return
             match = re.fullmatch(r"/api/projects/([^/]+)/files", path)
             if match:
-                form = cgi.FieldStorage(fp=self.rfile, headers=self.headers, environ={
-                    "REQUEST_METHOD": "POST",
-                    "CONTENT_TYPE": self.headers.get("Content-Type", ""),
-                })
-                control_id = str(form.getfirst("control_id") or "DOC-001")
-                file_item = form["file"] if "file" in form else None
-                if file_item is None or not getattr(file_item, "filename", ""):
+                length = int(self.headers.get("Content-Length", "0") or "0")
+                fields, files = parse_multipart(
+                    self.headers.get("Content-Type", ""),
+                    self.rfile.read(length),
+                )
+                control_id = str(fields.get("control_id") or "DOC-001")
+                file_item = next((item for item in files if item["field_name"] == "file"), None)
+                if file_item is None:
                     raise ValueError("No se recibio archivo")
-                content = file_item.file.read()
-                content_type = getattr(file_item, "type", None) or mimetypes.guess_type(file_item.filename)[0] or "application/octet-stream"
-                saved = upload_file(unquote(match.group(1)), control_id, file_item.filename, content, content_type)
+                content_type = file_item["content_type"] or mimetypes.guess_type(file_item["filename"])[0] or "application/octet-stream"
+                saved = upload_file(unquote(match.group(1)), control_id, file_item["filename"], file_item["content"], content_type)
                 self.send_json({"file": saved, "administrative_ready": False}, HTTPStatus.CREATED)
                 return
             self.send_json({"error": "Ruta API no encontrada"}, HTTPStatus.NOT_FOUND)

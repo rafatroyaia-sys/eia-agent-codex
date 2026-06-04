@@ -154,6 +154,23 @@ Ver `docs/CLIENT_ACTION_PLAN.md`.
 
 **Verificar siempre online antes de cada expediente.**
 
+## App web para cliente
+
+La aplicacion cliente se puede desplegar como servicio web publico con frontend
+y backend en el mismo dominio. El repositorio incluye:
+
+- `Dockerfile`: entorno reproducible.
+- `render.yaml`: Blueprint de Render con health check y disco persistente.
+- `src/eia_agent/core/client_web_service.py`: servicio web desplegable.
+- `docs/DEPLOY_PUBLIC_WEB.md`: instrucciones para obtener una URL publica.
+
+En Render, conectar este repositorio mediante `New > Blueprint`, introducir una
+clave privada en `EIA_ACCESS_TOKEN` y desplegar. El cliente solo necesitara la
+URL y esa clave; no instala Python ni ejecuta archivos locales.
+
+La app organiza y genera expedientes respetando gates tecnicos. No declara
+automaticamente aptitud administrativa.
+
 ---
 
 *EIA-Agent v2.1 — 2026-04-13*

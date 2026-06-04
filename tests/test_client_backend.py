@@ -14,8 +14,10 @@ from eia_agent.core.client_backend import (
     CLIENT_ENTRY_FILE,
     CLIENT_FILES_INDEX,
     build_generate_plan,
+    build_backend_handler,
     create_project_from_payload,
     list_backend_projects,
+    parse_multipart_form,
     save_project_upload,
 )
 
@@ -90,6 +92,34 @@ class TestClientBackend(unittest.TestCase):
         self.assertIn("cliente-app-package --write", plan["commands"])
         self.assertFalse(plan["administrative_ready"])
         self.assertIn("gates", plan["note"].lower())
+
+    def test_parse_multipart_form_works_without_cgi(self):
+        boundary = "----EIAAgentBoundary"
+        body = (
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="control_id"\r\n\r\n'
+            "DOC-001\r\n"
+            f"--{boundary}\r\n"
+            'Content-Disposition: form-data; name="file"; filename="memoria.pdf"\r\n'
+            "Content-Type: application/pdf\r\n\r\n"
+        ).encode("utf-8") + b"PDF-CONTENT\r\n" + f"--{boundary}--\r\n".encode("utf-8")
+
+        fields, files = parse_multipart_form(
+            f"multipart/form-data; boundary={boundary}",
+            body,
+        )
+
+        self.assertEqual(fields["control_id"], "DOC-001")
+        self.assertEqual(files[0]["filename"], "memoria.pdf")
+        self.assertEqual(files[0]["content"], b"PDF-CONTENT")
+
+    def test_backend_handler_accepts_access_token_configuration(self):
+        static_dir = self.tmp / "static"
+        static_dir.mkdir()
+
+        handler = build_backend_handler(self.tmp, static_dir, access_token="clave-segura")
+
+        self.assertEqual(handler.access_token, "clave-segura")
 
 
 if __name__ == "__main__":

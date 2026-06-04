@@ -171,6 +171,13 @@ def build_new_project_app_html(
       gap: 10px;
       margin-top: 18px;
     }}
+    .access-key {{
+      width: min(260px, 100%);
+      border-color: rgba(255,255,255,.35);
+      background: rgba(255,255,255,.12);
+      color: white;
+    }}
+    .access-key::placeholder {{ color: #d7edf3; }}
     button {{
       border: 1px solid var(--brand);
       background: var(--brand);
@@ -294,6 +301,7 @@ def build_new_project_app_html(
     <h1>EIA-Agent | Nuevo expediente ambiental</h1>
     <p>Alta profesional de proyectos para generar Documentos Ambientales con memorias, coordenadas, fotos, mapas, climograma, medidas, PVA y control de presentacion.</p>
     <div class="topbar">
+      <input class="access-key" id="access-key" type="password" placeholder="Clave de acceso">
       <button id="create-backend">Crear expediente en backend</button>
       <button id="save-project">Guardar proyecto</button>
       <button class="ghost" id="download-json">Descargar entrada JSON</button>
@@ -382,9 +390,17 @@ def build_new_project_app_html(
     const disclaimer = {disclaimer_json};
     const essentialFields = ['project_name', 'promoter', 'location', 'coordinates_wgs84', 'activity_type', 'object_description'];
     const storageKey = 'eia_agent_client_projects_v1';
+    const accessKeyStorage = 'eia_agent_access_key_v1';
     let backendOnline = false;
     let backendProjectId = '';
     function value(id) {{ return document.getElementById(id)?.value?.trim() || ''; }}
+    function accessKey() {{ return document.getElementById('access-key')?.value || ''; }}
+    function apiHeaders(json = false) {{
+      const headers = {{}};
+      if (json) headers['Content-Type'] = 'application/json';
+      if (accessKey()) headers['X-EIA-Key'] = accessKey();
+      return headers;
+    }}
     function fileMeta(controlId) {{
       const input = document.getElementById(`file-${{controlId}}`);
       return Array.from(input?.files || []).map((f) => ({{ name: f.name, size_bytes: f.size, type: f.type || 'unknown' }}));
@@ -551,7 +567,7 @@ def build_new_project_app_html(
       }}
       const res = await fetch('/api/projects', {{
         method: 'POST',
-        headers: {{ 'Content-Type': 'application/json' }},
+        headers: apiHeaders(true),
         body: JSON.stringify(data)
       }});
       if (!res.ok) {{
@@ -570,6 +586,7 @@ def build_new_project_app_html(
           form.append('file', file);
           await fetch(`/api/projects/${{encodeURIComponent(backendProjectId)}}/files`, {{
             method: 'POST',
+            headers: apiHeaders(false),
             body: form
           }});
         }}
@@ -591,6 +608,9 @@ def build_new_project_app_html(
       document.querySelectorAll('select').forEach((el) => el.value = '');
       refresh();
     }});
+    const accessKeyInput = document.getElementById('access-key');
+    accessKeyInput.value = localStorage.getItem(accessKeyStorage) || '';
+    accessKeyInput.addEventListener('input', () => localStorage.setItem(accessKeyStorage, accessKeyInput.value));
     renderProjects();
     refresh();
     checkBackend();

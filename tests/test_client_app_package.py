@@ -155,6 +155,8 @@ class TestClientAppPackage(unittest.TestCase):
         self.assertIn("Nuevo expediente ambiental", html)
         self.assertIn("Guardar proyecto", html)
         self.assertIn("Crear expediente en backend", html)
+        self.assertIn("Clave de acceso", html)
+        self.assertIn("X-EIA-Key", html)
         self.assertIn("/api/health", html)
         self.assertIn("/api/projects", html)
         self.assertIn("Descargar entrada JSON", html)
