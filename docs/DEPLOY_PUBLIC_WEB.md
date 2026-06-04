@@ -9,7 +9,7 @@ tecnicas.
 - Un unico servicio web sirve frontend y API desde el mismo dominio.
 - Docker garantiza un entorno reproducible.
 - Render construye y despliega automaticamente desde GitHub.
-- Un disco persistente conserva expedientes y archivos subidos en `/var/data`.
+- La primera publicacion usa el servicio gratuito para poder probar la app sin tarjeta.
 - El servicio publica un health check en `/api/health`.
 
 ## Despliegue recomendado
@@ -39,18 +39,14 @@ El cliente introduce la clave de acceso en la cabecera de la app. El navegador
 la guarda localmente y la API rechaza la creacion/listado/subida de expedientes
 si la clave no coincide.
 
-## Persistencia
+## Primera prueba gratuita
 
-El Blueprint configura un disco persistente de 1 GB montado en `/var/data`.
-Los proyectos nuevos y sus inputs se guardan debajo de:
+El Blueprint utiliza el plan gratuito de Render y no solicita tarjeta. Permite
+probar la URL publica, el frontend, la creacion de expedientes y las subidas.
 
-```text
-/var/data/expedientes_cliente/
-```
-
-Los discos persistentes de Render requieren un servicio de pago. Para una
-prueba temporal se puede retirar el bloque `disk` de `render.yaml`, pero los
-archivos se perderan al reiniciar o redesplegar el servicio.
+Importante: en la version gratuita, los archivos pueden borrarse cuando Render
+reinicie o vuelva a desplegar la app. Antes de entregar el producto definitivo
+al cliente se conectara almacenamiento permanente.
 
 ## Comprobaciones
 

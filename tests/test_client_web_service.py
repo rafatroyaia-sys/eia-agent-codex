@@ -40,7 +40,8 @@ class TestClientWebService(unittest.TestCase):
         self.assertIn("eia_agent.core.client_web_service", dockerfile)
         self.assertIn("EXPOSE 10000", dockerfile)
         self.assertIn("healthCheckPath: /api/health", render_yaml)
-        self.assertIn("mountPath: /var/data", render_yaml)
+        self.assertIn("plan: free", render_yaml)
+        self.assertNotIn("mountPath:", render_yaml)
         self.assertIn("EIA_ACCESS_TOKEN", render_yaml)
 
 
