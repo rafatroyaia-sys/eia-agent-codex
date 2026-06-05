@@ -37,6 +37,7 @@ class TestClientWebService(unittest.TestCase):
 
         dockerfile = (root / "Dockerfile").read_text(encoding="utf-8")
         render_yaml = (root / "render.yaml").read_text(encoding="utf-8")
+        production_yaml = (root / "render.production.yaml").read_text(encoding="utf-8")
 
         self.assertIn("eia_agent.core.client_web_service", dockerfile)
         self.assertIn("EXPOSE 10000", dockerfile)
@@ -44,6 +45,8 @@ class TestClientWebService(unittest.TestCase):
         self.assertIn("plan: free", render_yaml)
         self.assertNotIn("mountPath:", render_yaml)
         self.assertIn("EIA_ACCESS_TOKEN", render_yaml)
+        self.assertIn("mountPath: /var/data", production_yaml)
+        self.assertIn("EIA_PERSISTENT_STORAGE", production_yaml)
 
 
 if __name__ == "__main__":

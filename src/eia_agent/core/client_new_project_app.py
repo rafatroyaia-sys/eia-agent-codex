@@ -291,6 +291,7 @@ def build_new_project_app_html(
       font-size: 13px;
       font-weight: 700;
     }}
+    .storage-status {{ margin-left: 8px; }}
     .workflow {{
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -330,9 +331,14 @@ def build_new_project_app_html(
       <input class="access-key" id="access-key" type="password" placeholder="Clave de acceso">
       <button id="create-backend">Guardar expediente y subir archivos</button>
       <button id="save-project">Guardar borrador en este navegador</button>
+      <button class="ghost" id="restore-backup">Restaurar copia completa</button>
+      <input id="restore-backup-file" type="file" accept=".zip" hidden>
       <button class="ghost" id="reset-form">Nuevo limpio</button>
     </div>
-    <div class="backend-status" id="backend-status">Backend: comprobando conexion</div>
+    <div>
+      <span class="backend-status" id="backend-status">Servicio: comprobando conexion</span>
+      <span class="backend-status storage-status" id="storage-status">Almacenamiento: comprobando</span>
+    </div>
   </header>
   <main>
     <section class="workflow">
@@ -347,6 +353,7 @@ def build_new_project_app_html(
       <div class="metric"><strong>{len(maps)}</strong><span>Mapas/planos esperados</span></div>
       <div class="metric"><strong id="score-status">Pendiente</strong><span>Estado de entrada</span></div>
       <div class="metric"><strong id="backend-project">Sin crear</strong><span>Expediente backend</span></div>
+      <div class="metric"><strong id="storage-metric">Comprobando</strong><span>Proteccion de archivos</span></div>
     </section>
     <section class="layout">
       <aside class="panel">
@@ -410,6 +417,7 @@ def build_new_project_app_html(
             <button id="create-backend-bottom">1. Guardar expediente y subir archivos</button>
             <button class="secondary" id="validate-backend">2. Validar documentacion</button>
             <button id="generate-document" disabled>3. Generar Documento Ambiental</button>
+            <button class="secondary" id="download-backup" disabled>Descargar copia completa</button>
           </div>
           <div class="generation-box" id="generation-box">
             <strong>Estado: pendiente de guardar y validar</strong>
@@ -429,6 +437,7 @@ def build_new_project_app_html(
     let backendOnline = false;
     let backendProjectId = '';
     let backendProjects = [];
+    let storagePersistent = false;
     function value(id) {{ return document.getElementById(id)?.value?.trim() || ''; }}
     function accessKey() {{ return document.getElementById('access-key')?.value || ''; }}
     function apiHeaders(json = false) {{
@@ -493,6 +502,7 @@ def build_new_project_app_html(
       document.getElementById('score-files').textContent = `${{data.validation.high_files_complete}}/${{data.validation.high_files_total}}`;
       document.getElementById('score-status').textContent = data.validation.ready_for_engine ? 'Completa' : 'Pendiente';
       document.getElementById('backend-project').textContent = backendProjectId || 'Sin crear';
+      document.getElementById('download-backup').disabled = !backendProjectId;
       const list = document.getElementById('checklist');
       list.innerHTML = '';
       const items = [
@@ -617,17 +627,24 @@ def build_new_project_app_html(
     function downloadMd() {{ download(`${{safeName()}}_checklist_entrada.md`, checklistMarkdown(), 'text/markdown'); }}
     async function checkBackend() {{
       const status = document.getElementById('backend-status');
+      const storage = document.getElementById('storage-status');
       try {{
         const res = await fetch('/api/health', {{ cache: 'no-store' }});
         const data = await res.json();
         backendOnline = Boolean(data.ok);
-        status.textContent = backendOnline ? 'Backend: conectado' : 'Backend: no disponible';
+        status.textContent = backendOnline ? 'Servicio: conectado' : 'Servicio: no disponible';
         status.className = backendOnline ? 'backend-status ok' : 'backend-status';
+        storagePersistent = Boolean(data.storage?.persistent);
+        storage.textContent = storagePersistent ? 'Archivos: almacenamiento permanente' : 'Archivos: descargue copias completas';
+        storage.className = storagePersistent ? 'backend-status storage-status ok' : 'backend-status storage-status warn';
+        document.getElementById('storage-metric').textContent = storagePersistent ? 'Permanente' : 'Con copias';
         if (backendOnline) await loadBackendProjects();
       }} catch (err) {{
         backendOnline = false;
-        status.textContent = 'Backend: modo navegador local';
+        status.textContent = 'Servicio: modo navegador local';
         status.className = 'backend-status';
+        storage.textContent = 'Archivos: sin verificar';
+        document.getElementById('storage-metric').textContent = 'Sin verificar';
       }}
     }}
     async function createInBackend() {{
@@ -677,7 +694,7 @@ def build_new_project_app_html(
       const box = document.getElementById('generation-box');
       const list = items.length ? `<ul>${{items.map((item) => `<li>${{item}}</li>`).join('')}}</ul>` : '';
       const files = outputs.length
-        ? `<div class="actions">${{outputs.map((item, idx) => `<button class="secondary output-download" data-output="${{idx}}">Descargar ${{item.name}}</button>`).join('')}}</div>`
+        ? `<div class="actions">${{outputs.map((item, idx) => `<button class="secondary output-download" data-output="${{idx}}">${{item.label || 'Descargar'}}: ${{item.name}}</button>`).join('')}}</div>`
         : '';
       box.innerHTML = `<strong>${{title}}</strong><p class="muted">${{message || ''}}</p>${{list}}${{files}}`;
       outputs.forEach((item, idx) => {{
@@ -755,6 +772,47 @@ def build_new_project_app_html(
       a.remove();
       URL.revokeObjectURL(url);
     }}
+    async function downloadBackup() {{
+      if (!backendProjectId) {{
+        alert('Guarde o abra primero un expediente.');
+        return;
+      }}
+      const res = await fetch(`/api/projects/${{encodeURIComponent(backendProjectId)}}/backup`, {{
+        headers: apiHeaders(false)
+      }});
+      if (!res.ok) {{
+        alert('No se pudo crear la copia completa.');
+        return;
+      }}
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${{backendProjectId}}_COPIA_COMPLETA.zip`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    }}
+    async function restoreBackup(file) {{
+      if (!file) return;
+      const form = new FormData();
+      form.append('backup', file);
+      const res = await fetch('/api/projects/restore', {{
+        method: 'POST',
+        headers: apiHeaders(false),
+        body: form
+      }});
+      const body = await res.json();
+      if (!res.ok) {{
+        alert(`No se pudo restaurar la copia: ${{body.error || 'archivo no valido'}}`);
+        return;
+      }}
+      backendProjectId = body.project.project_id;
+      await loadBackendProjects();
+      await loadBackendProject(backendProjectId);
+      alert('Copia completa restaurada correctamente.');
+    }}
     document.querySelectorAll('input, textarea, select').forEach((el) => el.addEventListener('input', refresh));
     document.querySelectorAll('input[type=file]').forEach((el) => el.addEventListener('change', refresh));
     document.getElementById('save-project').addEventListener('click', saveCurrent);
@@ -762,6 +820,9 @@ def build_new_project_app_html(
     document.getElementById('create-backend-bottom').addEventListener('click', createInBackend);
     document.getElementById('validate-backend').addEventListener('click', validateInBackend);
     document.getElementById('generate-document').addEventListener('click', generateDocument);
+    document.getElementById('download-backup').addEventListener('click', downloadBackup);
+    document.getElementById('restore-backup').addEventListener('click', () => document.getElementById('restore-backup-file').click());
+    document.getElementById('restore-backup-file').addEventListener('change', (event) => restoreBackup(event.target.files?.[0]));
     document.getElementById('reset-form').addEventListener('click', () => {{
       document.querySelectorAll('input, textarea').forEach((el) => {{ if (el.type !== 'file') el.value = ''; }});
       document.querySelectorAll('select').forEach((el) => el.value = '');

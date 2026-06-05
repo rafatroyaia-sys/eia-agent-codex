@@ -48,6 +48,25 @@ Importante: en la version gratuita, los archivos pueden borrarse cuando Render
 reinicie o vuelva a desplegar la app. Antes de entregar el producto definitivo
 al cliente se conectara almacenamiento permanente.
 
+Mientras se mantenga el plan gratuito, la app permite descargar una
+`COPIA_COMPLETA.zip` de cada expediente y restaurarla desde la propia pantalla.
+La copia incluye inputs, fotos, cartografia, controles internos y documentos
+generados.
+
+## Paso a produccion con almacenamiento permanente
+
+La configuracion preparada esta en `render.production.yaml`. Para la entrega
+definitiva al cliente:
+
+1. Cambiar el servicio de Render de `Free` a un plan de pago compatible.
+2. En `Disks`, anadir un disco con ruta de montaje `/var/data`.
+3. Crear la variable `EIA_PERSISTENT_STORAGE=true`.
+4. Confirmar que la cabecera de la app muestra `Archivos: almacenamiento permanente`.
+
+Render conserva los archivos escritos bajo `/var/data` entre reinicios y
+despliegues, cifra el disco y crea snapshots diarios. El disco no sustituye a
+las copias completas descargables: conviene conservar ambas protecciones.
+
 ## Comprobaciones
 
 Tras el despliegue:

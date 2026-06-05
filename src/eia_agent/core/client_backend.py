@@ -8,6 +8,7 @@ No ejecuta automaticamente fases tecnicas ni declara aptitud administrativa.
 """
 from __future__ import annotations
 
+import io
 import json
 import mimetypes
 import os
@@ -17,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import threading
+import zipfile
 from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from email import policy
@@ -53,6 +55,8 @@ UPLOAD_TARGETS: dict[str, str] = {
 }
 
 MAX_UPLOAD_REQUEST_BYTES = 100 * 1024 * 1024
+MAX_BACKUP_REQUEST_BYTES = 500 * 1024 * 1024
+MAX_BACKUP_UNCOMPRESSED_BYTES = 2 * 1024 * 1024 * 1024
 ESSENTIAL_PROJECT_FIELDS = {
     "project_name": "Nombre del proyecto",
     "promoter": "Promotor / titular",
@@ -179,6 +183,26 @@ def _expediente_path(workspace: str | Path, project_id: str) -> Path:
     return _projects_root(workspace) / sanitize_expediente_id(project_id)
 
 
+def storage_status(workspace: str | Path) -> dict[str, Any]:
+    """Describe el almacenamiento operativo sin prometer persistencia inexistente."""
+    root = _projects_root(workspace)
+    root.mkdir(parents=True, exist_ok=True)
+    usage = shutil.disk_usage(root)
+    persistent = os.getenv("EIA_PERSISTENT_STORAGE", "").strip().lower() in {"1", "true", "yes", "si"}
+    return {
+        "mode": "PERSISTENT" if persistent else "TEMPORARY_WITH_BACKUPS",
+        "persistent": persistent,
+        "workspace": str(Path(workspace).resolve()),
+        "free_bytes": usage.free,
+        "total_bytes": usage.total,
+        "message": (
+            "Almacenamiento permanente activo con copias diarias de Render."
+            if persistent
+            else "Almacenamiento temporal: descargue una copia completa de cada expediente."
+        ),
+    }
+
+
 def create_project_from_payload(
     workspace: str | Path,
     payload: dict[str, Any],
@@ -278,6 +302,62 @@ def save_project_upload(
     files.append(saved.to_dict())
     _write_upload_index(exp_path, files)
     return saved
+
+
+def build_project_backup(workspace: str | Path, project_id: str) -> Path:
+    """Crea una copia ZIP completa y restaurable del expediente."""
+    exp_path = _expediente_path(workspace, project_id)
+    if not exp_path.exists():
+        raise FileNotFoundError(f"Proyecto no encontrado: {project_id}")
+    backup_dir = Path(workspace).resolve() / "copias_seguridad"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+    backup_path = backup_dir / f"{exp_path.name}_COPIA_COMPLETA_{timestamp}.zip"
+    with zipfile.ZipFile(backup_path, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for path in sorted(exp_path.rglob("*")):
+            if path.is_file():
+                archive.write(path, arcname=str(Path(exp_path.name) / path.relative_to(exp_path)))
+    return backup_path
+
+
+def restore_project_backup(workspace: str | Path, filename: str, content: bytes) -> ClientBackendProject:
+    """Restaura una copia generada por la app, validando rutas y estructura."""
+    if not filename.lower().endswith(".zip"):
+        raise ValueError("La copia debe ser un archivo ZIP")
+    projects_root = _projects_root(workspace)
+    projects_root.mkdir(parents=True, exist_ok=True)
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        files = [info for info in archive.infolist() if not info.is_dir()]
+        if not files:
+            raise ValueError("La copia ZIP esta vacia")
+        if sum(info.file_size for info in files) > MAX_BACKUP_UNCOMPRESSED_BYTES:
+            raise ValueError("La copia supera el tamano maximo permitido")
+        roots = {Path(info.filename.replace("\\", "/")).parts[0] for info in files if Path(info.filename).parts}
+        if len(roots) != 1:
+            raise ValueError("La copia no contiene un unico expediente")
+        project_id = sanitize_expediente_id(next(iter(roots)))
+        if not project_id:
+            raise ValueError("No se pudo identificar el expediente")
+        exp_path = _expediente_path(workspace, project_id).resolve()
+        for info in files:
+            relative = Path(info.filename.replace("\\", "/"))
+            if relative.parts[0] != project_id:
+                raise ValueError("La copia contiene rutas no validas")
+            target = (projects_root / relative).resolve()
+            if projects_root.resolve() not in target.parents:
+                raise ValueError("La copia contiene una ruta no permitida")
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with archive.open(info) as source, target.open("wb") as destination:
+                shutil.copyfileobj(source, destination)
+    entry = _read_json_file(exp_path / CLIENT_ENTRY_FILE)
+    return ClientBackendProject(
+        project_id=project_id,
+        project_name=_project_name(entry),
+        expediente_path=str(exp_path),
+        status="PROJECT_RESTORED",
+        administrative_ready=False,
+        warnings=[],
+    )
 
 
 def list_backend_projects(workspace: str | Path) -> list[dict[str, Any]]:
@@ -398,13 +478,26 @@ def list_generated_outputs(exp_path: Path) -> list[dict[str, Any]]:
             if not path.is_file() or path.suffix.lower() not in allowed:
                 continue
             rel = str(path.relative_to(exp_path)).replace("\\", "/")
+            name_lower = path.name.lower()
+            if name_lower == "documento_ambiental_final_revisable.docx":
+                kind, label, priority = "EDITABLE_WORD", "Word editable final", 0
+            elif path.suffix.lower() == ".docx":
+                kind, label, priority = "EDITABLE_WORD", "Word editable", 1
+            elif path.suffix.lower() == ".zip":
+                kind, label, priority = "COMPLETE_PACKAGE", "Paquete completo", 2
+            else:
+                kind, label, priority = "PDF", "PDF de consulta", 3
             outputs.append({
                 "name": path.name,
                 "relative_path": rel,
                 "size_bytes": path.stat().st_size,
+                "kind": kind,
+                "label": label,
+                "editable": path.suffix.lower() == ".docx",
+                "priority": priority,
                 "download_url": f"/api/projects/{exp_path.name}/outputs/{rel}",
             })
-    return outputs
+    return sorted(outputs, key=lambda item: (item["priority"], item["name"].lower()))
 
 
 def get_generation_status(workspace: str | Path, project_id: str) -> dict[str, Any]:
@@ -602,9 +695,15 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
             self._send_json({
                 "ok": True,
                 "service": "EIA-Agent Client Backend",
+                "storage": storage_status(self.workspace),
                 "administrative_ready": False,
                 "disclaimer": DISCLAIMER,
             })
+            return
+        if parsed.path == "/api/storage":
+            if not self._require_authorized():
+                return
+            self._send_json({"storage": storage_status(self.workspace)})
             return
         if parsed.path == "/api/projects":
             if not self._require_authorized():
@@ -643,6 +742,13 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
                 return
             self._send_file(candidate)
             return
+        match_backup = re.fullmatch(r"/api/projects/([^/]+)/backup", parsed.path)
+        if match_backup:
+            if not self._require_authorized():
+                return
+            backup = build_project_backup(self.workspace, unquote(match_backup.group(1)))
+            self._send_file(backup)
+            return
         return super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
@@ -654,6 +760,9 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
                 payload = self._read_json_body()
                 project = create_project_from_payload(self.workspace, payload)
                 self._send_json({"project": project.to_dict()}, status=HTTPStatus.CREATED)
+                return
+            if parsed.path == "/api/projects/restore":
+                self._handle_restore()
                 return
             match_upload = re.fullmatch(r"/api/projects/([^/]+)/files", parsed.path)
             if match_upload:
@@ -696,6 +805,24 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
             content_type,
         )
         self._send_json({"file": saved.to_dict(), "administrative_ready": False}, status=HTTPStatus.CREATED)
+
+    def _handle_restore(self) -> None:
+        length = int(self.headers.get("Content-Length", "0") or "0")
+        if length <= 0 or length > MAX_BACKUP_REQUEST_BYTES:
+            raise ValueError("Tamano de copia no permitido")
+        _, files = parse_multipart_form(
+            self.headers.get("Content-Type", ""),
+            self.rfile.read(length),
+        )
+        file_item = next((item for item in files if item["field_name"] == "backup"), None)
+        if file_item is None:
+            raise ValueError("No se recibio la copia de seguridad")
+        project = restore_project_backup(
+            self.workspace,
+            file_item["filename"],
+            file_item["content"],
+        )
+        self._send_json({"project": project.to_dict()}, status=HTTPStatus.CREATED)
 
     def translate_path(self, path: str) -> str:
         parsed = urlparse(path)

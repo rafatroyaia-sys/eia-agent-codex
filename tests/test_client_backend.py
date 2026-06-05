@@ -14,6 +14,7 @@ from eia_agent.core.client_backend import (
     CLIENT_ENTRY_FILE,
     CLIENT_FILES_INDEX,
     build_project_readiness,
+    build_project_backup,
     build_generate_plan,
     build_backend_handler,
     create_project_from_payload,
@@ -21,7 +22,9 @@ from eia_agent.core.client_backend import (
     get_generation_status,
     list_backend_projects,
     parse_multipart_form,
+    restore_project_backup,
     save_project_upload,
+    storage_status,
 )
 
 
@@ -141,6 +144,35 @@ class TestClientBackend(unittest.TestCase):
         self.assertEqual(project["entry"]["project"]["project_name"], "Planta Cliente Norte")
         self.assertIn("readiness", project)
         self.assertIn("generation", project)
+
+    def test_backup_and_restore_preserve_complete_project(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+        save_project_upload(
+            self.tmp,
+            result.project_id,
+            "DOC-001",
+            "memoria.pdf",
+            b"PDF-CONTENT",
+            "application/pdf",
+        )
+        backup = build_project_backup(self.tmp, result.project_id)
+        restored_workspace = self.tmp / "restored"
+
+        restored = restore_project_backup(restored_workspace, backup.name, backup.read_bytes())
+
+        self.assertEqual(restored.project_id, result.project_id)
+        restored_exp = Path(restored.expediente_path)
+        self.assertTrue((restored_exp / CLIENT_ENTRY_FILE).exists())
+        self.assertEqual(
+            (restored_exp / "inputs/memoria_tecnica/memoria.pdf").read_bytes(),
+            b"PDF-CONTENT",
+        )
+
+    def test_storage_status_is_prudent_by_default(self):
+        status = storage_status(self.tmp)
+
+        self.assertFalse(status["persistent"])
+        self.assertEqual(status["mode"], "TEMPORARY_WITH_BACKUPS")
 
     def test_parse_multipart_form_works_without_cgi(self):
         boundary = "----EIAAgentBoundary"
