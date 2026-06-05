@@ -1131,9 +1131,13 @@ def build_block_g(exp_path: "str | Path", manifest_item: Any) -> DocumentBlockBu
 
     phase3_path = exp / "control_interno" / "phase3_result.json"
     phase3 = safe_load_json(phase3_path)
+    entry_path = exp / "control_interno" / "entrada_cliente.json"
+    entry = safe_load_json(entry_path)
 
     if phase3 is not None:
         source_files.append("control_interno/phase3_result.json")
+    if entry is not None:
+        source_files.append("control_interno/entrada_cliente.json")
 
     # Nota: capas/hechos_confirmados.json y capas/normativa_aplicable.json
     # son inputs del manifest pero alternativas vienen de phase3 si existe
@@ -1188,14 +1192,33 @@ def build_block_g(exp_path: "str | Path", manifest_item: Any) -> DocumentBlockBu
                 adesc = _str(_get(alt, "description") or _get(alt, "descripcion"), "")
                 lines.append(f"**{aname}:** {adesc}\n")
         else:
+            project = _get(entry or {}, "project") or {}
+            activity = _str(_get(project, "activity_type"), "la actividad proyectada")
+            location = _str(_get(project, "location"), "el emplazamiento declarado")
             lines.append(
-                "> _No consta documentacion de alternativas en phase3_result.json. "
-                "Este bloque queda PARTIAL hasta que el promotor aporte la justificacion "
-                "de la solucion adoptada._\n"
+                "> **PROPUESTA AUTOMATICA PENDIENTE DE CONFIRMACION DEL PROMOTOR.** "
+                "Las siguientes alternativas se infieren de la entrada cliente y no "
+                "acreditan por si solas decisiones reales del promotor.\n"
+            )
+            lines.append(
+                "**Alternativa cero - no ejecucion del proyecto:** mantener la situacion "
+                f"actual sin implantar {activity} en {location}. Evita los impactos "
+                "asociados a la nueva actuacion, pero no alcanza los objetivos declarados "
+                "del proyecto.\n"
+            )
+            lines.append(
+                "**Alternativa seleccionada - ejecucion en el emplazamiento declarado:** "
+                f"desarrollar {activity} en {location}, conforme a las memorias y planos "
+                "aportados, incorporando las medidas ambientales y el PVA que resulten "
+                "de la evaluacion.\n"
+            )
+            lines.append(
+                "**Alternativa de optimizacion:** mantener la finalidad del proyecto "
+                "revisando distribucion, superficie ocupada, operaciones, horarios y "
+                "medidas para reducir emisiones, ruido, consumos y afecciones al entorno.\n"
             )
             warnings.append(
-                "No constan alternativas en phase3_result.json. "
-                "Bloque G marcado PARTIAL."
+                "Alternativas propuestas automaticamente; requieren confirmacion del promotor."
             )
     else:
         lines.append(
@@ -1207,8 +1230,10 @@ def build_block_g(exp_path: "str | Path", manifest_item: Any) -> DocumentBlockBu
 
     lines.append("\n### G.2 Justificacion de la solucion adoptada\n")
     lines.append(
-        "_[Requiere aportacion del promotor o datos de la Fase 2 que incluyan "
-        "la justificacion de la alternativa seleccionada.]_\n"
+        "La solucion declarada se considera provisionalmente preferente por responder "
+        "al objeto y emplazamiento aportados. La justificacion comparativa definitiva "
+        "debe ser confirmada por el promotor y revisada con los resultados ambientales, "
+        "cartograficos y normativos del expediente.\n"
     )
     warnings.append(
         "Justificacion de solucion adoptada pendiente de datos del promotor."

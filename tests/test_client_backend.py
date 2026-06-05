@@ -105,12 +105,12 @@ class TestClientBackend(unittest.TestCase):
         readiness = build_project_readiness(self.tmp, result.project_id)
 
         self.assertFalse(readiness["ready_for_generation"])
-        self.assertEqual(len(readiness["missing_documents"]), 4)
+        self.assertEqual(len(readiness["missing_documents"]), 3)
         self.assertTrue(readiness["coordinate_format_ok"])
 
     def test_readiness_accepts_complete_minimum_entry(self):
         result = create_project_from_payload(self.tmp, self._payload())
-        for control_id in ("DOC-001", "DOC-002", "DOC-004", "DOC-006"):
+        for control_id in ("DOC-001", "DOC-002", "DOC-004"):
             save_project_upload(
                 self.tmp,
                 result.project_id,

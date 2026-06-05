@@ -808,6 +808,25 @@ class TestBuildBlocksWithMinimalSources(unittest.TestCase):
         result = build_block_g(self.exp_path, item)
         self.assertIn(result.status, ("GENERATED", "PARTIAL"))
 
+    def test_block_g_proposes_alternative_zero_from_client_entry(self):
+        phase3_path = self.exp_path / "control_interno" / "phase3_result.json"
+        phase3_path.write_text(json.dumps({
+            "procedure": {"type": "SIMPLIFICADA"},
+        }), encoding="utf-8")
+        entry_path = self.exp_path / "control_interno" / "entrada_cliente.json"
+        entry_path.write_text(json.dumps({
+            "project": {
+                "activity_type": "Gestion de residuos",
+                "location": "Arrecife, Lanzarote",
+            }
+        }), encoding="utf-8")
+
+        result = build_block_g(self.exp_path, _FakeManifestItem("G"))
+
+        self.assertIn("Alternativa cero", result.markdown)
+        self.assertIn("PROPUESTA AUTOMATICA", result.markdown)
+        self.assertIn("requieren confirmacion", " ".join(result.warnings).lower())
+
     def test_block_h_generated_or_partial(self):
         item = _FakeManifestItem("H")
         result = build_block_h(self.exp_path, item)

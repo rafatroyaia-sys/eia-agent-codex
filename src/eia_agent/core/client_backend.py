@@ -69,7 +69,6 @@ REQUIRED_HIGH_DOCUMENTS = {
     "DOC-001": "Memoria tecnica del proyecto",
     "DOC-002": "Memoria de explotacion u operaciones",
     "DOC-004": "Planos o esquemas",
-    "DOC-006": "Alternativas estudiadas",
 }
 GENERATION_STEPS = [
     ("FASE_1", "Procesar memorias y evidencias", ["phase1", "--write"]),

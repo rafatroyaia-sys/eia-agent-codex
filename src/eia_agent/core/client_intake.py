@@ -265,8 +265,8 @@ def _make_requirements(exp: Path, scope: dict[str, Any]) -> list[IntakeRequireme
             evidence=carto_files[:10],
         ),
         IntakeRequirement(
-            "DOC-006", "Alternativas estudiadas", "DOCUMENT", "ALTA", True,
-            "inputs/memoria_tecnica/", "Alternativa cero, alternativas razonables y justificacion ambiental de la seleccionada.",
+            "DOC-006", "Alternativas estudiadas o confirmacion de propuesta", "DOCUMENT", "MEDIA", False,
+            "inputs/memoria_tecnica/", "Opcional: la app propone alternativa cero y alternativas razonables para confirmacion del promotor.",
             accepted_formats=["DOCX", "PDF"],
             status="PARCIAL" if memoria_files else "PENDIENTE",
             evidence=memoria_files[:5],

@@ -64,7 +64,7 @@ class TestClientIntake(unittest.TestCase):
 
         self.assertTrue(data["ready_for_initial_processing"])
         self.assertEqual(data["counts"]["required_pending"], 0)
-        self.assertEqual(data["counts"]["high_pending"], 1)  # alternativas quedan PARCIAL
+        self.assertEqual(data["counts"]["high_pending"], 0)
         self.assertFalse(data["administrative_ready"])
 
     def test_requirements_have_expected_contract_keys(self):
