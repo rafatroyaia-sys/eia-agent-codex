@@ -13,9 +13,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from eia_agent.core.client_backend import (
     CLIENT_ENTRY_FILE,
     CLIENT_FILES_INDEX,
+    build_project_readiness,
     build_generate_plan,
     build_backend_handler,
     create_project_from_payload,
+    get_backend_project,
+    get_generation_status,
     list_backend_projects,
     parse_multipart_form,
     save_project_upload,
@@ -92,6 +95,52 @@ class TestClientBackend(unittest.TestCase):
         self.assertIn("cliente-app-package --write", plan["commands"])
         self.assertFalse(plan["administrative_ready"])
         self.assertIn("gates", plan["note"].lower())
+
+    def test_readiness_requires_saved_high_priority_documents(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+
+        readiness = build_project_readiness(self.tmp, result.project_id)
+
+        self.assertFalse(readiness["ready_for_generation"])
+        self.assertEqual(len(readiness["missing_documents"]), 4)
+        self.assertTrue(readiness["coordinate_format_ok"])
+
+    def test_readiness_accepts_complete_minimum_entry(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+        for control_id in ("DOC-001", "DOC-002", "DOC-004", "DOC-006"):
+            save_project_upload(
+                self.tmp,
+                result.project_id,
+                control_id,
+                f"{control_id}.pdf",
+                b"PDF",
+                "application/pdf",
+            )
+
+        readiness = build_project_readiness(self.tmp, result.project_id)
+
+        self.assertTrue(readiness["ready_for_generation"])
+        self.assertFalse(readiness["administrative_ready"])
+        self.assertEqual(readiness["blockers"], [])
+
+    def test_generation_status_starts_as_not_started(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+
+        status = get_generation_status(self.tmp, result.project_id)
+
+        self.assertEqual(status["status"], "NOT_STARTED")
+        self.assertEqual(status["outputs"], [])
+        self.assertFalse(status["administrative_ready"])
+
+    def test_get_backend_project_supports_resuming_work(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+
+        project = get_backend_project(self.tmp, result.project_id)
+
+        self.assertEqual(project["project_id"], result.project_id)
+        self.assertEqual(project["entry"]["project"]["project_name"], "Planta Cliente Norte")
+        self.assertIn("readiness", project)
+        self.assertIn("generation", project)
 
     def test_parse_multipart_form_works_without_cgi(self):
         boundary = "----EIAAgentBoundary"

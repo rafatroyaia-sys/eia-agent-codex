@@ -14,6 +14,10 @@ import os
 import re
 import secrets
 import shutil
+import subprocess
+import sys
+import threading
+from datetime import datetime, timezone
 from dataclasses import dataclass, field
 from email import policy
 from email.parser import BytesParser
@@ -29,6 +33,7 @@ from eia_agent.core.expediente_initializer import initialize_expediente, sanitiz
 CLIENT_PROJECTS_DIR = "expedientes_cliente"
 CLIENT_ENTRY_FILE = "control_interno/entrada_cliente.json"
 CLIENT_FILES_INDEX = "control_interno/inventario_archivos_cliente.json"
+CLIENT_GENERATION_STATUS = "control_interno/estado_generacion_cliente.json"
 CLIENT_BACKEND_PORT = 8765
 
 DISCLAIMER = (
@@ -48,6 +53,28 @@ UPLOAD_TARGETS: dict[str, str] = {
 }
 
 MAX_UPLOAD_REQUEST_BYTES = 100 * 1024 * 1024
+ESSENTIAL_PROJECT_FIELDS = {
+    "project_name": "Nombre del proyecto",
+    "promoter": "Promotor / titular",
+    "location": "Isla, municipio y direccion",
+    "coordinates_wgs84": "Coordenadas WGS84",
+    "activity_type": "Tipo de actividad",
+    "object_description": "Descripcion del objeto evaluado",
+}
+REQUIRED_HIGH_DOCUMENTS = {
+    "DOC-001": "Memoria tecnica del proyecto",
+    "DOC-002": "Memoria de explotacion u operaciones",
+    "DOC-004": "Planos o esquemas",
+    "DOC-006": "Alternativas estudiadas",
+}
+GENERATION_STEPS = [
+    ("FASE_1", "Procesar memorias y evidencias", ["phase1", "--write"]),
+    ("FASE_2", "Cerrar el objeto evaluado", ["phase2", "--write"]),
+    ("FASE_3", "Preparar el encuadre normativo", ["phase3", "--write"]),
+    ("DOCUMENTO", "Generar borrador tecnico y control documental", ["cliente-da", "--write"]),
+]
+_GENERATION_LOCK = threading.Lock()
+_RUNNING_PROJECTS: set[str] = set()
 
 
 @dataclass
@@ -281,6 +308,214 @@ def list_backend_projects(workspace: str | Path) -> list[dict[str, Any]]:
     return projects
 
 
+def get_backend_project(workspace: str | Path, project_id: str) -> dict[str, Any]:
+    """Devuelve la entrada guardada y su estado para reanudar el trabajo."""
+    exp_path = _expediente_path(workspace, project_id)
+    if not exp_path.exists():
+        raise FileNotFoundError(f"Proyecto no encontrado: {project_id}")
+    return {
+        "project_id": exp_path.name,
+        "entry": _read_json_file(exp_path / CLIENT_ENTRY_FILE),
+        "readiness": build_project_readiness(workspace, project_id),
+        "generation": get_generation_status(workspace, project_id),
+        "administrative_ready": False,
+    }
+
+
+def _read_json_file(path: Path) -> dict[str, Any]:
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
+def build_project_readiness(workspace: str | Path, project_id: str) -> dict[str, Any]:
+    """Valida los minimos reales guardados antes de ejecutar el motor."""
+    exp_path = _expediente_path(workspace, project_id)
+    if not exp_path.exists():
+        raise FileNotFoundError(f"Proyecto no encontrado: {project_id}")
+    entry = _read_json_file(exp_path / CLIENT_ENTRY_FILE)
+    project = entry.get("project", {}) if isinstance(entry.get("project"), dict) else {}
+    files = _read_upload_index(exp_path)
+    uploaded_ids = {str(item.get("control_id") or "") for item in files}
+    missing_fields = [
+        {"field": key, "label": label}
+        for key, label in ESSENTIAL_PROJECT_FIELDS.items()
+        if not str(project.get(key) or "").strip()
+    ]
+    coordinate_value = str(project.get("coordinates_wgs84") or "").strip()
+    coordinate_ok = bool(re.fullmatch(
+        r"-?\d{1,2}(?:[.,]\d+)?\s*,\s*-?\d{1,3}(?:[.,]\d+)?",
+        coordinate_value,
+    ))
+    missing_documents = [
+        {"control_id": key, "label": label}
+        for key, label in REQUIRED_HIGH_DOCUMENTS.items()
+        if key not in uploaded_ids
+    ]
+    blockers = [
+        *[f"Falta dato esencial: {item['label']}" for item in missing_fields],
+        *[f"Falta documento prioritario: {item['label']}" for item in missing_documents],
+    ]
+    if coordinate_value and not coordinate_ok:
+        blockers.append("Las coordenadas WGS84 no tienen un formato reconocible")
+    return {
+        "project_id": sanitize_expediente_id(project_id),
+        "ready_for_generation": not blockers,
+        "administrative_ready": False,
+        "missing_fields": missing_fields,
+        "missing_documents": missing_documents,
+        "coordinate_format_ok": coordinate_ok,
+        "uploaded_files": len(files),
+        "blockers": blockers,
+        "note": (
+            "Superar esta validacion permite generar un borrador tecnico. "
+            "La aptitud administrativa exige cerrar todos los gates y la auditoria final."
+        ),
+    }
+
+
+def _generation_status_path(exp_path: Path) -> Path:
+    return exp_path / CLIENT_GENERATION_STATUS
+
+
+def _write_generation_status(exp_path: Path, data: dict[str, Any]) -> None:
+    path = _generation_status_path(exp_path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def list_generated_outputs(exp_path: Path) -> list[dict[str, Any]]:
+    """Lista entregables descargables producidos por el motor."""
+    outputs: list[dict[str, Any]] = []
+    allowed = {".docx", ".pdf", ".zip"}
+    for folder_name in ("output", "documento"):
+        folder = exp_path / folder_name
+        if not folder.exists():
+            continue
+        for path in sorted(folder.rglob("*")):
+            if not path.is_file() or path.suffix.lower() not in allowed:
+                continue
+            rel = str(path.relative_to(exp_path)).replace("\\", "/")
+            outputs.append({
+                "name": path.name,
+                "relative_path": rel,
+                "size_bytes": path.stat().st_size,
+                "download_url": f"/api/projects/{exp_path.name}/outputs/{rel}",
+            })
+    return outputs
+
+
+def get_generation_status(workspace: str | Path, project_id: str) -> dict[str, Any]:
+    exp_path = _expediente_path(workspace, project_id)
+    if not exp_path.exists():
+        raise FileNotFoundError(f"Proyecto no encontrado: {project_id}")
+    status = _read_json_file(_generation_status_path(exp_path))
+    if not status:
+        status = {
+            "project_id": sanitize_expediente_id(project_id),
+            "status": "NOT_STARTED",
+            "message": "La generacion todavia no se ha iniciado.",
+            "administrative_ready": False,
+            "steps": [],
+        }
+    status["outputs"] = list_generated_outputs(exp_path)
+    return status
+
+
+def _run_generation(workspace: Path, project_id: str) -> None:
+    exp_path = _expediente_path(workspace, project_id)
+    runner = Path(__file__).resolve().parents[3] / "run_expediente.py"
+    started = datetime.now(timezone.utc).isoformat()
+    status: dict[str, Any] = {
+        "project_id": sanitize_expediente_id(project_id),
+        "status": "RUNNING",
+        "message": "Validacion superada. Procesando el expediente.",
+        "started_at": started,
+        "administrative_ready": False,
+        "steps": [],
+    }
+    _write_generation_status(exp_path, status)
+    try:
+        for step_id, label, args in GENERATION_STEPS:
+            status["current_step"] = step_id
+            status["message"] = label
+            _write_generation_status(exp_path, status)
+            result = subprocess.run(
+                [sys.executable, str(runner), str(exp_path), *args],
+                cwd=str(runner.parent),
+                capture_output=True,
+                text=True,
+                timeout=1800,
+                check=False,
+            )
+            step = {
+                "step_id": step_id,
+                "label": label,
+                "return_code": result.returncode,
+                "status": "OK" if result.returncode == 0 else "BLOCKED",
+                "summary": (result.stdout or result.stderr or "").strip()[-2000:],
+            }
+            status["steps"].append(step)
+            if result.returncode != 0:
+                status["status"] = "BLOCKED"
+                status["message"] = (
+                    f"El proceso se detuvo en '{label}'. Revise los datos o documentos pendientes."
+                )
+                break
+        else:
+            status["status"] = "COMPLETED_WITH_REVIEW"
+            status["message"] = (
+                "Borrador tecnico generado. Debe revisarse y superar la auditoria final "
+                "antes de presentarlo."
+            )
+    except Exception as exc:
+        status["status"] = "FAILED"
+        status["message"] = f"No se pudo completar la generacion: {exc}"
+    finally:
+        status["finished_at"] = datetime.now(timezone.utc).isoformat()
+        status["administrative_ready"] = False
+        _write_generation_status(exp_path, status)
+        with _GENERATION_LOCK:
+            _RUNNING_PROJECTS.discard(sanitize_expediente_id(project_id))
+
+
+def start_project_generation(workspace: str | Path, project_id: str) -> dict[str, Any]:
+    """Inicia la generacion en segundo plano si los minimos estan completos."""
+    readiness = build_project_readiness(workspace, project_id)
+    if not readiness["ready_for_generation"]:
+        return {
+            "started": False,
+            "status": "BLOCKED",
+            "readiness": readiness,
+            "administrative_ready": False,
+        }
+    safe_id = sanitize_expediente_id(project_id)
+    with _GENERATION_LOCK:
+        if safe_id in _RUNNING_PROJECTS:
+            return {
+                "started": False,
+                "status": "RUNNING",
+                "message": "El expediente ya se esta procesando.",
+                "administrative_ready": False,
+            }
+        _RUNNING_PROJECTS.add(safe_id)
+    thread = threading.Thread(
+        target=_run_generation,
+        args=(Path(workspace).resolve(), safe_id),
+        daemon=True,
+        name=f"eia-generate-{safe_id}",
+    )
+    thread.start()
+    return {
+        "started": True,
+        "status": "RUNNING",
+        "message": "Generacion iniciada. La aplicacion mostrara el avance.",
+        "administrative_ready": False,
+    }
+
+
 def build_generate_plan(workspace: str | Path, project_id: str) -> dict[str, Any]:
     """Devuelve la secuencia de ejecucion recomendada para generar el DA."""
     exp_path = _expediente_path(workspace, project_id)
@@ -337,6 +572,15 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
         raw = self.rfile.read(length) if length else b"{}"
         return json.loads(raw.decode("utf-8"))
 
+    def _send_file(self, path: Path) -> None:
+        body = path.read_bytes()
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", mimetypes.guess_type(path.name)[0] or "application/octet-stream")
+        self.send_header("Content-Disposition", f'attachment; filename="{_safe_filename(path.name)}"')
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _authorized(self) -> bool:
         if not self.access_token:
             return True
@@ -367,6 +611,38 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
                 return
             self._send_json({"projects": list_backend_projects(self.workspace), "administrative_ready": False})
             return
+        match_project = re.fullmatch(r"/api/projects/([^/]+)", parsed.path)
+        if match_project:
+            if not self._require_authorized():
+                return
+            project = get_backend_project(self.workspace, unquote(match_project.group(1)))
+            self._send_json({"project": project})
+            return
+        match_readiness = re.fullmatch(r"/api/projects/([^/]+)/readiness", parsed.path)
+        if match_readiness:
+            if not self._require_authorized():
+                return
+            readiness = build_project_readiness(self.workspace, unquote(match_readiness.group(1)))
+            self._send_json({"readiness": readiness})
+            return
+        match_status = re.fullmatch(r"/api/projects/([^/]+)/generation-status", parsed.path)
+        if match_status:
+            if not self._require_authorized():
+                return
+            status = get_generation_status(self.workspace, unquote(match_status.group(1)))
+            self._send_json({"generation": status})
+            return
+        match_output = re.fullmatch(r"/api/projects/([^/]+)/outputs/(.+)", parsed.path)
+        if match_output:
+            if not self._require_authorized():
+                return
+            exp_path = _expediente_path(self.workspace, unquote(match_output.group(1))).resolve()
+            candidate = (exp_path / unquote(match_output.group(2))).resolve()
+            if exp_path not in candidate.parents or not candidate.is_file():
+                self._send_json({"error": "Archivo no encontrado"}, status=HTTPStatus.NOT_FOUND)
+                return
+            self._send_file(candidate)
+            return
         return super().do_GET()
 
     def do_POST(self) -> None:  # noqa: N802
@@ -387,6 +663,12 @@ class ClientBackendHandler(SimpleHTTPRequestHandler):
             if match_generate:
                 plan = build_generate_plan(self.workspace, unquote(match_generate.group(1)))
                 self._send_json({"plan": plan})
+                return
+            match_start = re.fullmatch(r"/api/projects/([^/]+)/generate", parsed.path)
+            if match_start:
+                result = start_project_generation(self.workspace, unquote(match_start.group(1)))
+                status = HTTPStatus.ACCEPTED if result.get("started") else HTTPStatus.CONFLICT
+                self._send_json({"generation": result}, status=status)
                 return
             self._send_json({"error": "Ruta API no encontrada"}, status=HTTPStatus.NOT_FOUND)
         except Exception as exc:

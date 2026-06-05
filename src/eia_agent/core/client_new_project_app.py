@@ -103,7 +103,8 @@ def build_new_project_app_html(
 ) -> str:
     """Renderiza app HTML autocontenida para iniciar expedientes nuevos."""
     controls = _controls_payload(schema)
-    required_uploads = [c for c in controls if c["required"] and c["control_type"] == "file_upload"]
+    upload_controls = [c for c in controls if c["control_type"] == "file_upload"]
+    required_uploads = [c for c in upload_controls if c["required"] and c["priority"] == "ALTA"]
     maps = list(map_requirements)
     controls_json = json.dumps(controls, ensure_ascii=False)
     maps_json = json.dumps(maps, ensure_ascii=False)
@@ -111,12 +112,13 @@ def build_new_project_app_html(
     upload_rows = "\n".join(
         "<tr>"
         f"<td><strong>{_text(c['control_id'])}</strong></td>"
-        f"<td>{_text(c['label'])}<small>{_text(c['help_text'])}</small></td>"
+        f"<td>{_text(c['label'])}<small>{_text(c['help_text'])} "
+        f"{'Obligatorio.' if c['required'] else 'Recomendado para mejorar el informe.'}</small></td>"
         f"<td><span class='pill {_text(str(c['priority']).lower())}'>{_text(c['priority'])}</span></td>"
         f"<td>{_text(', '.join(c.get('accepted_formats') or ['PDF', 'DOCX', 'PNG', 'JPG']))}</td>"
         f"<td><input id='file-{_text(c['control_id'])}' data-control='{_text(c['control_id'])}' type='file' multiple></td>"
         "</tr>"
-        for c in required_uploads
+        for c in upload_controls
     )
     map_rows = "\n".join(
         "<tr>"
@@ -289,8 +291,32 @@ def build_new_project_app_html(
       font-size: 13px;
       font-weight: 700;
     }}
+    .workflow {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 18px;
+    }}
+    .workflow-step {{
+      background: white;
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--brand-2);
+      border-radius: 6px;
+      padding: 12px;
+      font-weight: 700;
+    }}
+    .workflow-step small {{ display: block; color: var(--muted); font-weight: 400; margin-top: 4px; }}
+    .generation-box {{
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      border-radius: 6px;
+      padding: 14px;
+      margin-top: 14px;
+    }}
+    .generation-box ul {{ margin: 8px 0 0; padding-left: 20px; }}
+    button:disabled {{ opacity: .45; cursor: not-allowed; }}
     @media (max-width: 980px) {{
-      .layout, .summary {{ grid-template-columns: 1fr; }}
+      .layout, .summary, .workflow {{ grid-template-columns: 1fr; }}
       header {{ padding: 24px 20px; }}
       main {{ padding: 16px; }}
     }}
@@ -302,15 +328,19 @@ def build_new_project_app_html(
     <p>Alta profesional de proyectos para generar Documentos Ambientales con memorias, coordenadas, fotos, mapas, climograma, medidas, PVA y control de presentacion.</p>
     <div class="topbar">
       <input class="access-key" id="access-key" type="password" placeholder="Clave de acceso">
-      <button id="create-backend">Crear expediente en backend</button>
-      <button id="save-project">Guardar proyecto</button>
-      <button class="ghost" id="download-json">Descargar entrada JSON</button>
-      <button class="ghost" id="download-md">Descargar checklist</button>
+      <button id="create-backend">Guardar expediente y subir archivos</button>
+      <button id="save-project">Guardar borrador en este navegador</button>
       <button class="ghost" id="reset-form">Nuevo limpio</button>
     </div>
     <div class="backend-status" id="backend-status">Backend: comprobando conexion</div>
   </header>
   <main>
+    <section class="workflow">
+      <div class="workflow-step">1. Rellenar datos<small>Identificacion, ubicacion y actividad.</small></div>
+      <div class="workflow-step">2. Subir documentos<small>Memorias, planos, alternativas y fotos.</small></div>
+      <div class="workflow-step">3. Validar expediente<small>La app indica exactamente que falta.</small></div>
+      <div class="workflow-step">4. Generar y revisar<small>Borrador tecnico, controles y descarga.</small></div>
+    </section>
     <section class="summary">
       <div class="metric"><strong id="score-required">0/6</strong><span>Datos esenciales</span></div>
       <div class="metric"><strong id="score-files">0/{len(required_uploads)}</strong><span>Bloques documentales</span></div>
@@ -360,6 +390,7 @@ def build_new_project_app_html(
         </section>
         <section class="panel">
           <h2>2. Documentacion y archivos</h2>
+          <div class="note">Seleccione los archivos antes de pulsar <strong>Guardar expediente y subir archivos</strong>. Puede aportar varios archivos en cada apartado.</div>
           <table>
             <thead><tr><th>ID</th><th>Requisito</th><th>Prioridad</th><th>Formatos</th><th>Archivos</th></tr></thead>
             <tbody>{upload_rows}</tbody>
@@ -374,11 +405,15 @@ def build_new_project_app_html(
         </section>
         <section class="panel">
           <h2>4. Salida para generar el Documento Ambiental</h2>
-          <p class="muted">Cuando los minimos esten completos, descargue la entrada JSON y el checklist. Esa entrada alimenta el motor EIA-Agent para crear el expediente, sus mapas, climograma, Documento Ambiental DOCX y auditoria.</p>
+          <p class="muted">Primero guarde el expediente y suba los archivos. Despues valide la documentacion. La generacion solo se inicia si no faltan datos o documentos prioritarios.</p>
           <div class="actions">
-            <button id="create-backend-bottom">Crear expediente en backend</button>
-            <button id="download-json-bottom">Descargar entrada JSON</button>
-            <button class="secondary" id="download-md-bottom">Descargar checklist</button>
+            <button id="create-backend-bottom">1. Guardar expediente y subir archivos</button>
+            <button class="secondary" id="validate-backend">2. Validar documentacion</button>
+            <button id="generate-document" disabled>3. Generar Documento Ambiental</button>
+          </div>
+          <div class="generation-box" id="generation-box">
+            <strong>Estado: pendiente de guardar y validar</strong>
+            <p class="muted">Aqui apareceran los documentos pendientes, el avance y las descargas disponibles.</p>
           </div>
         </section>
       </div>
@@ -393,6 +428,7 @@ def build_new_project_app_html(
     const accessKeyStorage = 'eia_agent_access_key_v1';
     let backendOnline = false;
     let backendProjectId = '';
+    let backendProjects = [];
     function value(id) {{ return document.getElementById(id)?.value?.trim() || ''; }}
     function accessKey() {{ return document.getElementById('access-key')?.value || ''; }}
     function apiHeaders(json = false) {{
@@ -477,7 +513,14 @@ def build_new_project_app_html(
     function renderProjects() {{
       const box = document.getElementById('project-list');
       const items = projects();
-      box.innerHTML = items.length ? '' : '<p class="muted">No hay expedientes guardados en este navegador.</p>';
+      box.innerHTML = (items.length || backendProjects.length) ? '' : '<p class="muted">No hay expedientes guardados.</p>';
+      backendProjects.forEach((item) => {{
+        const btn = document.createElement('button');
+        btn.className = 'project-item';
+        btn.textContent = `${{item.project_name}} · servidor`;
+        btn.addEventListener('click', () => loadBackendProject(item.project_id));
+        box.appendChild(btn);
+      }});
       items.forEach((item, idx) => {{
         const btn = document.createElement('button');
         btn.className = 'project-item';
@@ -485,6 +528,33 @@ def build_new_project_app_html(
         btn.addEventListener('click', () => loadProject(item));
         box.appendChild(btn);
       }});
+    }}
+    async function loadBackendProjects() {{
+      if (!backendOnline || !accessKey()) return;
+      const res = await fetch('/api/projects', {{ headers: apiHeaders(false), cache: 'no-store' }});
+      if (!res.ok) return;
+      const body = await res.json();
+      backendProjects = body.projects || [];
+      renderProjects();
+    }}
+    async function loadBackendProject(projectId) {{
+      const res = await fetch(`/api/projects/${{encodeURIComponent(projectId)}}`, {{
+        headers: apiHeaders(false),
+        cache: 'no-store'
+      }});
+      if (!res.ok) {{
+        alert('No se pudo abrir el expediente guardado.');
+        return;
+      }}
+      const body = await res.json();
+      backendProjectId = body.project.project_id;
+      loadProject(body.project.entry || {{}});
+      const readiness = body.project.readiness;
+      document.getElementById('generate-document').disabled = !readiness.ready_for_generation;
+      const generation = body.project.generation;
+      const steps = (generation.steps || []).map((step) => `${{step.status}}: ${{step.label}}`);
+      renderGeneration(`Estado: ${{generation.status}}`, generation.message, steps, generation.outputs || []);
+      refresh();
     }}
     function loadProject(data) {{
       Object.entries(data.project || {{}}).forEach(([id, val]) => {{
@@ -553,6 +623,7 @@ def build_new_project_app_html(
         backendOnline = Boolean(data.ok);
         status.textContent = backendOnline ? 'Backend: conectado' : 'Backend: no disponible';
         status.className = backendOnline ? 'backend-status ok' : 'backend-status';
+        if (backendOnline) await loadBackendProjects();
       }} catch (err) {{
         backendOnline = false;
         status.textContent = 'Backend: modo navegador local';
@@ -578,31 +649,119 @@ def build_new_project_app_html(
       const created = await res.json();
       backendProjectId = created.project.project_id;
       const uploadInputs = Array.from(document.querySelectorAll('input[type=file]'));
+      let uploadErrors = 0;
       for (const input of uploadInputs) {{
         const controlId = input.dataset.control;
         for (const file of Array.from(input.files || [])) {{
           const form = new FormData();
           form.append('control_id', controlId);
           form.append('file', file);
-          await fetch(`/api/projects/${{encodeURIComponent(backendProjectId)}}/files`, {{
+          const uploadResponse = await fetch(`/api/projects/${{encodeURIComponent(backendProjectId)}}/files`, {{
             method: 'POST',
             headers: apiHeaders(false),
             body: form
           }});
+          if (!uploadResponse.ok) uploadErrors += 1;
         }}
       }}
       refresh();
-      alert(`Expediente creado: ${{backendProjectId}}`);
+      if (uploadErrors) {{
+        alert(`Expediente guardado, pero ${{uploadErrors}} archivo(s) no pudieron subirse.`);
+      }} else {{
+        alert('Expediente y archivos guardados correctamente. Ahora pulse "Validar documentacion".');
+      }}
+      await validateInBackend();
+      await loadBackendProjects();
+    }}
+    function renderGeneration(title, message, items = [], outputs = []) {{
+      const box = document.getElementById('generation-box');
+      const list = items.length ? `<ul>${{items.map((item) => `<li>${{item}}</li>`).join('')}}</ul>` : '';
+      const files = outputs.length
+        ? `<div class="actions">${{outputs.map((item, idx) => `<button class="secondary output-download" data-output="${{idx}}">Descargar ${{item.name}}</button>`).join('')}}</div>`
+        : '';
+      box.innerHTML = `<strong>${{title}}</strong><p class="muted">${{message || ''}}</p>${{list}}${{files}}`;
+      outputs.forEach((item, idx) => {{
+        box.querySelector(`[data-output="${{idx}}"]`)?.addEventListener('click', () => downloadOutput(item));
+      }});
+    }}
+    async function validateInBackend() {{
+      if (!backendProjectId) {{
+        renderGeneration('Falta guardar el expediente', 'Pulse primero "Guardar expediente y subir archivos".');
+        return false;
+      }}
+      const res = await fetch(`/api/projects/${{encodeURIComponent(backendProjectId)}}/readiness`, {{ headers: apiHeaders(false), cache: 'no-store' }});
+      const body = await res.json();
+      if (!res.ok) {{
+        renderGeneration('No se pudo validar', body.error || 'Revise la clave de acceso.');
+        return false;
+      }}
+      const readiness = body.readiness;
+      document.getElementById('generate-document').disabled = !readiness.ready_for_generation;
+      if (readiness.ready_for_generation) {{
+        renderGeneration(
+          'Documentacion minima completa',
+          'Ya puede generar un borrador tecnico. El resultado seguira necesitando revision y auditoria final.'
+        );
+        return true;
+      }}
+      renderGeneration('Faltan datos o documentos', 'Complete estos elementos antes de generar:', readiness.blockers);
+      return false;
+    }}
+    async function generateDocument() {{
+      if (!(await validateInBackend())) return;
+      document.getElementById('generate-document').disabled = true;
+      renderGeneration('Generacion iniciada', 'Puede tardar varios minutos. Esta pagina mostrara el avance.');
+      const res = await fetch(`/api/projects/${{encodeURIComponent(backendProjectId)}}/generate`, {{
+        method: 'POST',
+        headers: apiHeaders(false)
+      }});
+      const body = await res.json();
+      if (!res.ok && body.generation?.status !== 'RUNNING') {{
+        renderGeneration('No se pudo iniciar', body.generation?.readiness?.blockers?.join('. ') || body.error || 'Revise la documentacion.');
+        return;
+      }}
+      pollGeneration();
+    }}
+    async function pollGeneration() {{
+      if (!backendProjectId) return;
+      const res = await fetch(`/api/projects/${{encodeURIComponent(backendProjectId)}}/generation-status`, {{
+        headers: apiHeaders(false),
+        cache: 'no-store'
+      }});
+      const body = await res.json();
+      if (!res.ok) {{
+        renderGeneration('No se pudo consultar el avance', body.error || '');
+        return;
+      }}
+      const generation = body.generation;
+      const stepItems = (generation.steps || []).map((step) => `${{step.status}}: ${{step.label}}`);
+      renderGeneration(`Estado: ${{generation.status}}`, generation.message, stepItems, generation.outputs || []);
+      if (generation.status === 'RUNNING') setTimeout(pollGeneration, 5000);
+      else document.getElementById('generate-document').disabled = false;
+    }}
+    async function downloadOutput(item) {{
+      const res = await fetch(item.download_url, {{ headers: apiHeaders(false) }});
+      if (!res.ok) {{
+        alert('No se pudo descargar el archivo.');
+        return;
+      }}
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = item.name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
     }}
     document.querySelectorAll('input, textarea, select').forEach((el) => el.addEventListener('input', refresh));
     document.querySelectorAll('input[type=file]').forEach((el) => el.addEventListener('change', refresh));
     document.getElementById('save-project').addEventListener('click', saveCurrent);
     document.getElementById('create-backend').addEventListener('click', createInBackend);
     document.getElementById('create-backend-bottom').addEventListener('click', createInBackend);
-    document.getElementById('download-json').addEventListener('click', downloadJson);
-    document.getElementById('download-json-bottom').addEventListener('click', downloadJson);
-    document.getElementById('download-md').addEventListener('click', downloadMd);
-    document.getElementById('download-md-bottom').addEventListener('click', downloadMd);
+    document.getElementById('validate-backend').addEventListener('click', validateInBackend);
+    document.getElementById('generate-document').addEventListener('click', generateDocument);
     document.getElementById('reset-form').addEventListener('click', () => {{
       document.querySelectorAll('input, textarea').forEach((el) => {{ if (el.type !== 'file') el.value = ''; }});
       document.querySelectorAll('select').forEach((el) => el.value = '');
@@ -611,6 +770,7 @@ def build_new_project_app_html(
     const accessKeyInput = document.getElementById('access-key');
     accessKeyInput.value = localStorage.getItem(accessKeyStorage) || '';
     accessKeyInput.addEventListener('input', () => localStorage.setItem(accessKeyStorage, accessKeyInput.value));
+    accessKeyInput.addEventListener('change', loadBackendProjects);
     renderProjects();
     refresh();
     checkBackend();

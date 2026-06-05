@@ -27,7 +27,8 @@ class TestClientWebService(unittest.TestCase):
         self.assertTrue((static_dir / "nuevo_expediente.html").exists())
         self.assertTrue((static_dir / "data" / "new_project_blueprint.json").exists())
         self.assertIn("Nuevo expediente ambiental", html)
-        self.assertIn("Crear expediente en backend", html)
+        self.assertIn("Guardar expediente y subir archivos", html)
+        self.assertIn("Generar Documento Ambiental", html)
         self.assertIn("Clave de acceso", html)
         self.assertIn("/api/projects", html)
 
