@@ -164,17 +164,27 @@ def build_new_project_app_html(
       color: white;
       padding: 30px 34px;
     }}
+    .header-inner {{ max-width: 1220px; margin: 0 auto; }}
     header h1 {{ margin: 0 0 8px; font-size: 30px; letter-spacing: 0; }}
     header p {{ margin: 0; color: #d7edf3; max-width: 980px; }}
     main {{ max-width: 1220px; margin: 0 auto; padding: 24px; }}
     .topbar {{
       display: flex;
       flex-wrap: wrap;
+      align-items: end;
       gap: 10px;
       margin-top: 18px;
     }}
+    .access-block {{
+      display: grid;
+      gap: 5px;
+      width: min(280px, 100%);
+      color: #d7edf3;
+      font-size: 12px;
+      font-weight: 700;
+    }}
     .access-key {{
-      width: min(260px, 100%);
+      width: 100%;
       border-color: rgba(255,255,255,.35);
       background: rgba(255,255,255,.12);
       color: white;
@@ -255,6 +265,10 @@ def build_new_project_app_html(
     .ok {{ background: var(--ok-bg); color: var(--ok); border-color: #a8dbc0; }}
     .muted {{ color: var(--muted); }}
     .actions {{ display: flex; flex-wrap: wrap; gap: 10px; margin-top: 14px; }}
+    .actions button {{ min-height: 44px; }}
+    .table-wrap {{ width: 100%; overflow-x: auto; }}
+    .table-wrap table {{ min-width: 850px; }}
+    .table-wrap input[type=file] {{ min-width: 220px; }}
     .checklist {{ display: grid; gap: 8px; padding: 0; list-style: none; margin: 0; }}
     .checklist li {{
       display: flex;
@@ -291,6 +305,16 @@ def build_new_project_app_html(
       font-size: 13px;
       font-weight: 700;
     }}
+    .backend-status.ok {{
+      background: #e1f4e9;
+      color: #0b5d36;
+      border-color: #a8dbc0;
+    }}
+    .backend-status.warn {{
+      background: #fff0cf;
+      color: #7a4700;
+      border-color: #f0c36b;
+    }}
     .storage-status {{ margin-left: 8px; }}
     .workflow {{
       display: grid;
@@ -320,24 +344,29 @@ def build_new_project_app_html(
       .layout, .summary, .workflow {{ grid-template-columns: 1fr; }}
       header {{ padding: 24px 20px; }}
       main {{ padding: 16px; }}
+      .topbar button {{ flex: 1 1 210px; }}
+      .storage-status {{ margin-left: 0; }}
     }}
   </style>
 </head>
 <body>
   <header>
-    <h1>EIA-Agent | Nuevo expediente ambiental</h1>
-    <p>Alta profesional de proyectos para generar Documentos Ambientales con memorias, coordenadas, fotos, mapas, climograma, medidas, PVA y control de presentacion.</p>
-    <div class="topbar">
-      <input class="access-key" id="access-key" type="password" placeholder="Clave de acceso">
-      <button id="create-backend">Guardar expediente y subir archivos</button>
-      <button id="save-project">Guardar borrador en este navegador</button>
-      <button class="ghost" id="restore-backup">Restaurar copia completa</button>
-      <input id="restore-backup-file" type="file" accept=".zip" hidden>
-      <button class="ghost" id="reset-form">Nuevo limpio</button>
-    </div>
-    <div>
-      <span class="backend-status" id="backend-status">Servicio: comprobando conexion</span>
-      <span class="backend-status storage-status" id="storage-status">Almacenamiento: comprobando</span>
+    <div class="header-inner">
+      <h1>EIA-Agent | Nuevo expediente ambiental</h1>
+      <p>Prepare un Documento Ambiental con memorias, coordenadas, fotos, mapas, climograma, medidas, PVA y control de presentacion.</p>
+      <div class="topbar">
+        <label class="access-block">Clave de acceso
+          <input class="access-key" id="access-key" type="password" placeholder="Introduzca la clave facilitada">
+        </label>
+        <button id="save-project">Guardar borrador local</button>
+        <button class="ghost" id="restore-backup">Recuperar copia completa</button>
+        <input id="restore-backup-file" type="file" accept=".zip" hidden>
+        <button class="ghost" id="reset-form">Nuevo expediente</button>
+      </div>
+      <div>
+        <span class="backend-status" id="backend-status">Servicio: comprobando conexion</span>
+        <span class="backend-status storage-status" id="storage-status">Archivos: comprobando proteccion</span>
+      </div>
     </div>
   </header>
   <main>
@@ -398,17 +427,21 @@ def build_new_project_app_html(
         <section class="panel">
           <h2>2. Documentacion y archivos</h2>
           <div class="note">Seleccione los archivos antes de pulsar <strong>Guardar expediente y subir archivos</strong>. Puede aportar varios archivos en cada apartado.</div>
-          <table>
-            <thead><tr><th>ID</th><th>Requisito</th><th>Prioridad</th><th>Formatos</th><th>Archivos</th></tr></thead>
-            <tbody>{upload_rows}</tbody>
-          </table>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Requisito</th><th>Prioridad</th><th>Formatos</th><th>Archivos</th></tr></thead>
+              <tbody>{upload_rows}</tbody>
+            </table>
+          </div>
         </section>
         <section class="panel">
           <h2>3. Cartografia, planos y clima esperados</h2>
-          <table>
-            <thead><tr><th>ID</th><th>Mapa/plano</th><th>Prioridad</th><th>Capas minimas</th></tr></thead>
-            <tbody>{map_rows}</tbody>
-          </table>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>ID</th><th>Mapa/plano</th><th>Prioridad</th><th>Capas minimas</th></tr></thead>
+              <tbody>{map_rows}</tbody>
+            </table>
+          </div>
         </section>
         <section class="panel">
           <h2>4. Salida para generar el Documento Ambiental</h2>
@@ -816,7 +849,6 @@ def build_new_project_app_html(
     document.querySelectorAll('input, textarea, select').forEach((el) => el.addEventListener('input', refresh));
     document.querySelectorAll('input[type=file]').forEach((el) => el.addEventListener('change', refresh));
     document.getElementById('save-project').addEventListener('click', saveCurrent);
-    document.getElementById('create-backend').addEventListener('click', createInBackend);
     document.getElementById('create-backend-bottom').addEventListener('click', createInBackend);
     document.getElementById('validate-backend').addEventListener('click', validateInBackend);
     document.getElementById('generate-document').addEventListener('click', generateDocument);

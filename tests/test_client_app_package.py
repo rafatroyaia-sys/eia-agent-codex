@@ -153,7 +153,7 @@ class TestClientAppPackage(unittest.TestCase):
         )
 
         self.assertIn("Nuevo expediente ambiental", html)
-        self.assertIn("Guardar borrador en este navegador", html)
+        self.assertIn("Guardar borrador local", html)
         self.assertIn("Guardar expediente y subir archivos", html)
         self.assertIn("Generar Documento Ambiental", html)
         self.assertIn("Clave de acceso", html)
