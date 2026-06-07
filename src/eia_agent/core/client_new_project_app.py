@@ -137,13 +137,14 @@ def build_new_project_app_html(
   <title>EIA-Agent - Nuevo expediente ambiental</title>
   <style>
     :root {{
-      --bg: #eef2f5;
+      --bg: #eef4ef;
       --panel: #ffffff;
-      --ink: #15212b;
-      --muted: #667085;
-      --line: #d5dde5;
-      --brand: #145369;
-      --brand-2: #1f7a8c;
+      --ink: #18251f;
+      --muted: #5f6f68;
+      --line: #d7e2dc;
+      --brand: #1f5f43;
+      --brand-2: #2f8f5f;
+      --brand-3: #0f3d32;
       --ok: #146c43;
       --warn: #995c00;
       --danger: #a12121;
@@ -160,9 +161,12 @@ def build_new_project_app_html(
       line-height: 1.45;
     }}
     header {{
-      background: #0c2e3a;
+      background:
+        linear-gradient(135deg, rgba(15, 61, 50, .96), rgba(20, 83, 67, .94)),
+        repeating-linear-gradient(45deg, rgba(255,255,255,.06) 0 1px, transparent 1px 14px);
       color: white;
       padding: 30px 34px;
+      border-bottom: 1px solid rgba(255,255,255,.16);
     }}
     .header-inner {{ max-width: 1220px; margin: 0 auto; }}
     header h1 {{ margin: 0 0 8px; font-size: 30px; letter-spacing: 0; }}
@@ -199,6 +203,7 @@ def build_new_project_app_html(
       font-weight: 700;
       cursor: pointer;
     }}
+    button:hover {{ filter: brightness(1.05); }}
     button.secondary {{ background: white; color: var(--brand); }}
     button.ghost {{ background: transparent; color: white; border-color: rgba(255,255,255,.35); }}
     .layout {{
@@ -212,6 +217,7 @@ def build_new_project_app_html(
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 18px;
+      box-shadow: 0 10px 28px rgba(24,37,31,.05);
     }}
     .panel h2 {{ margin: 0 0 12px; font-size: 18px; letter-spacing: 0; }}
     .panel h3 {{ margin: 18px 0 8px; font-size: 15px; }}
@@ -226,9 +232,12 @@ def build_new_project_app_html(
       border: 1px solid var(--line);
       border-radius: 8px;
       padding: 14px;
+      border-left: 5px solid var(--brand-2);
     }}
     .metric strong {{ display: block; font-size: 26px; }}
     .metric span {{ color: var(--muted); font-size: 13px; }}
+    .metric.ok {{ border-left-color: var(--ok); background: #fbfffd; }}
+    .metric.warn {{ border-left-color: #d99b20; background: #fffdf8; }}
     label {{
       display: grid;
       gap: 6px;
@@ -245,6 +254,16 @@ def build_new_project_app_html(
       font: inherit;
       color: var(--ink);
       background: white;
+    }}
+    input:focus, textarea:focus, select:focus {{
+      outline: 3px solid rgba(47, 143, 95, .18);
+      border-color: var(--brand-2);
+    }}
+    .field-help {{
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 400;
+      margin-top: -4px;
     }}
     textarea {{ min-height: 110px; resize: vertical; }}
     table {{ width: 100%; border-collapse: collapse; font-size: 14px; }}
@@ -286,11 +305,11 @@ def build_new_project_app_html(
       border-color: var(--line);
     }}
     .note {{
-      background: #e8f3f6;
-      border: 1px solid #b9dbe4;
+      background: #eaf6ee;
+      border: 1px solid #bde4c9;
       border-radius: 8px;
       padding: 12px;
-      color: #17495a;
+      color: #194d33;
       margin-bottom: 14px;
     }}
     .backend-status {{
@@ -331,6 +350,35 @@ def build_new_project_app_html(
       font-weight: 700;
     }}
     .workflow-step small {{ display: block; color: var(--muted); font-weight: 400; margin-top: 4px; }}
+    .guidance {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: center;
+      margin-bottom: 18px;
+      background: #f8fffa;
+      border: 1px solid #bde4c9;
+      border-left: 6px solid var(--brand-2);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }}
+    .guidance strong {{ display: block; margin-bottom: 3px; }}
+    .guidance p {{ margin: 0; color: var(--muted); }}
+    .progress-line {{
+      height: 10px;
+      background: #dce9e1;
+      border-radius: 999px;
+      min-width: 220px;
+      overflow: hidden;
+    }}
+    .progress-line span {{
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--brand-2), #87c46f);
+      border-radius: inherit;
+      transition: width .2s ease;
+    }}
     .generation-box {{
       border: 1px solid var(--line);
       background: #f8fafc;
@@ -342,6 +390,7 @@ def build_new_project_app_html(
     button:disabled {{ opacity: .45; cursor: not-allowed; }}
     @media (max-width: 980px) {{
       .layout, .summary, .workflow {{ grid-template-columns: 1fr; }}
+      .guidance {{ grid-template-columns: 1fr; }}
       header {{ padding: 24px 20px; }}
       main {{ padding: 16px; }}
       .topbar button {{ flex: 1 1 210px; }}
@@ -376,6 +425,13 @@ def build_new_project_app_html(
       <div class="workflow-step">3. Validar expediente<small>La app indica exactamente que falta.</small></div>
       <div class="workflow-step">4. Generar y revisar<small>Borrador tecnico, controles y descarga.</small></div>
     </section>
+    <section class="guidance" aria-live="polite">
+      <div>
+        <strong id="next-action-title">Siguiente paso: rellenar datos esenciales</strong>
+        <p id="next-action-copy">Complete identificacion, ubicacion, coordenadas, actividad y objeto evaluado para preparar el expediente.</p>
+      </div>
+      <div class="progress-line" aria-label="Progreso de entrada"><span id="progress-bar"></span></div>
+    </section>
     <section class="summary">
       <div class="metric"><strong id="score-required">0/6</strong><span>Datos esenciales</span></div>
       <div class="metric"><strong id="score-files">0/{len(required_uploads)}</strong><span>Bloques documentales</span></div>
@@ -397,15 +453,19 @@ def build_new_project_app_html(
           <div class="note">Los datos introducidos quedan como DECLARADOS hasta que el tecnico los cierre con evidencia y cartografia oficial.</div>
           <label>Nombre del proyecto
             <input id="project_name" data-required="true" placeholder="Ej. Centro de valorizacion de residuos no peligrosos">
+            <span class="field-help">Nombre claro que aparecera en portada, indice y expediente.</span>
           </label>
           <label>Promotor / titular
             <input id="promoter" data-required="true" placeholder="Razon social del promotor">
+            <span class="field-help">Persona o entidad que presenta el Documento Ambiental.</span>
           </label>
           <label>Isla, municipio y direccion
             <input id="location" data-required="true" placeholder="Municipio, isla, direccion o paraje">
+            <span class="field-help">Cuanto mas concreta sea la ubicacion, mejor se preparan mapas y contexto territorial.</span>
           </label>
           <label>Coordenadas WGS84
             <input id="coordinates_wgs84" data-required="true" placeholder="28.000000, -16.000000">
+            <span class="field-help">Formato recomendado: latitud, longitud. Ejemplo: 28.123456, -16.123456.</span>
           </label>
           <label>Referencia catastral
             <input id="cadastre_reference" placeholder="Si consta">
@@ -422,6 +482,7 @@ def build_new_project_app_html(
           </label>
           <label>Descripcion del objeto evaluado
             <textarea id="object_description" data-required="true" placeholder="Operaciones, capacidad, superficies, procesos, accesos, horarios, focos de emision, residuos, agua, energia y elementos incluidos/excluidos"></textarea>
+            <span class="field-help">Incluya lo que entra y lo que queda fuera del proyecto; esto evita contradicciones en el informe.</span>
           </label>
         </section>
         <section class="panel">
@@ -467,6 +528,14 @@ def build_new_project_app_html(
     const essentialFields = ['project_name', 'promoter', 'location', 'coordinates_wgs84', 'activity_type', 'object_description'];
     const storageKey = 'eia_agent_client_projects_v1';
     const accessKeyStorage = 'eia_agent_access_key_v1';
+    const fieldLabels = {{
+      project_name: 'nombre del proyecto',
+      promoter: 'promotor o titular',
+      location: 'isla, municipio y direccion',
+      coordinates_wgs84: 'coordenadas WGS84',
+      activity_type: 'tipo de actividad',
+      object_description: 'descripcion del objeto evaluado'
+    }};
     let backendOnline = false;
     let backendProjectId = '';
     let backendProjects = [];
@@ -531,11 +600,18 @@ def build_new_project_app_html(
     }}
     function refresh() {{
       const data = currentProject();
-      document.getElementById('score-required').textContent = `${{data.validation.essential_complete}}/${{data.validation.essential_total}}`;
-      document.getElementById('score-files').textContent = `${{data.validation.high_files_complete}}/${{data.validation.high_files_total}}`;
-      document.getElementById('score-status').textContent = data.validation.ready_for_engine ? 'Completa' : 'Pendiente';
+      const requiredMetric = document.getElementById('score-required');
+      const filesMetric = document.getElementById('score-files');
+      const statusMetric = document.getElementById('score-status');
+      requiredMetric.textContent = `${{data.validation.essential_complete}}/${{data.validation.essential_total}}`;
+      filesMetric.textContent = `${{data.validation.high_files_complete}}/${{data.validation.high_files_total}}`;
+      statusMetric.textContent = data.validation.ready_for_engine ? 'Completa' : 'Pendiente';
+      requiredMetric.closest('.metric').className = `metric ${{data.validation.essential_complete === data.validation.essential_total ? 'ok' : 'warn'}}`;
+      filesMetric.closest('.metric').className = `metric ${{data.validation.high_files_complete === data.validation.high_files_total ? 'ok' : 'warn'}}`;
+      statusMetric.closest('.metric').className = `metric ${{data.validation.ready_for_engine ? 'ok' : 'warn'}}`;
       document.getElementById('backend-project').textContent = backendProjectId || 'Sin crear';
       document.getElementById('download-backup').disabled = !backendProjectId;
+      updateGuidance(data);
       const list = document.getElementById('checklist');
       list.innerHTML = '';
       const items = [
@@ -550,6 +626,39 @@ def build_new_project_app_html(
         li.innerHTML = `<span>${{label}}</span><span class="pill ${{ok ? 'ok' : 'warn'}}">${{ok ? 'OK' : 'Pendiente'}}</span>`;
         list.appendChild(li);
       }});
+    }}
+    function updateGuidance(data) {{
+      const title = document.getElementById('next-action-title');
+      const copy = document.getElementById('next-action-copy');
+      const progress = document.getElementById('progress-bar');
+      const total = data.validation.essential_total + data.validation.high_files_total;
+      const done = data.validation.essential_complete + data.validation.high_files_complete;
+      progress.style.width = `${{Math.round((done / Math.max(total, 1)) * 100)}}%`;
+      const missingFields = essentialFields.filter((id) => !data.project[id]).map((id) => fieldLabels[id] || id);
+      if (missingFields.length) {{
+        title.textContent = 'Siguiente paso: completar datos esenciales';
+        copy.textContent = `Falta: ${{missingFields.slice(0, 3).join(', ')}}${{missingFields.length > 3 ? '...' : ''}}. Estos datos son la base de portada, objeto evaluado y cartografia.`;
+        return;
+      }}
+      const missingHighFiles = data.files.filter((f) => f.required && f.priority === 'ALTA' && f.selected_files.length === 0);
+      if (missingHighFiles.length) {{
+        title.textContent = 'Siguiente paso: subir documentos prioritarios';
+        copy.textContent = `Falta cargar: ${{missingHighFiles.map((f) => f.control_id).join(', ')}}. La app puede seguir con documentos recomendados pendientes, pero no con estos minimos.`;
+        return;
+      }}
+      if (!backendProjectId) {{
+        title.textContent = 'Siguiente paso: guardar y subir archivos';
+        copy.textContent = 'La entrada minima esta completa. Pulse el boton 1 para crear el expediente y subir la documentacion al servicio.';
+        return;
+      }}
+      const generateDisabled = document.getElementById('generate-document').disabled;
+      if (generateDisabled) {{
+        title.textContent = 'Siguiente paso: validar documentacion';
+        copy.textContent = 'El expediente ya esta guardado. Pulse validar para que la app revise si puede generar el Documento Ambiental.';
+        return;
+      }}
+      title.textContent = 'Siguiente paso: generar Documento Ambiental';
+      copy.textContent = 'La app ya puede preparar el borrador tecnico, con Word editable y descargas de control para revision profesional.';
     }}
     function projects() {{ return JSON.parse(localStorage.getItem(storageKey) || '[]'); }}
     function saveProjects(items) {{ localStorage.setItem(storageKey, JSON.stringify(items)); renderProjects(); }}
