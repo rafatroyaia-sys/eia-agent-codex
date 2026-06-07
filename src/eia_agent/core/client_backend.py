@@ -74,6 +74,8 @@ GENERATION_STEPS = [
     ("FASE_1", "Procesar memorias y evidencias", ["phase1", "--write"]),
     ("FASE_2", "Cerrar el objeto evaluado", ["phase2", "--write"]),
     ("FASE_3", "Preparar el encuadre normativo", ["phase3", "--write"]),
+    ("CARTOGRAFIA_PLAN", "Preparar plan cartografico desde coordenadas", ["cartography-plan", "--write"]),
+    ("CARTOGRAFIA_MAPAS", "Generar mapas tecnicos provisionales", ["schematic-maps", "--write"]),
     ("DOCUMENTO", "Generar borrador tecnico y control documental", ["cliente-da", "--write"]),
 ]
 _GENERATION_LOCK = threading.Lock()
@@ -494,6 +496,26 @@ def list_generated_outputs(exp_path: Path) -> list[dict[str, Any]]:
                 "label": label,
                 "editable": path.suffix.lower() == ".docx",
                 "priority": priority,
+                "download_url": f"/api/projects/{exp_path.name}/outputs/{rel}",
+            })
+    visual_allowed = {".png", ".jpg", ".jpeg"}
+    for folder_name in ("cartografia/mapas", "mapas", "clima"):
+        folder = exp_path / folder_name
+        if not folder.exists():
+            continue
+        for path in sorted(folder.rglob("*")):
+            if not path.is_file() or path.suffix.lower() not in visual_allowed:
+                continue
+            rel = str(path.relative_to(exp_path)).replace("\\", "/")
+            is_climate = "clima" in rel.lower() or "climograma" in path.name.lower()
+            outputs.append({
+                "name": path.name,
+                "relative_path": rel,
+                "size_bytes": path.stat().st_size,
+                "kind": "CLIMOGRAM" if is_climate else "CARTOGRAPHY_IMAGE",
+                "label": "Climograma" if is_climate else "Mapa/plano",
+                "editable": False,
+                "priority": 4 if is_climate else 5,
                 "download_url": f"/api/projects/{exp_path.name}/outputs/{rel}",
             })
     return sorted(outputs, key=lambda item: (item["priority"], item["name"].lower()))

@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from eia_agent.core.client_backend import (
     CLIENT_ENTRY_FILE,
     CLIENT_FILES_INDEX,
+    GENERATION_STEPS,
     build_project_readiness,
     build_project_backup,
     build_generate_plan,
@@ -95,7 +96,11 @@ class TestClientBackend(unittest.TestCase):
         plan = build_generate_plan(self.tmp, result.project_id)
 
         self.assertIn("phase1 --write", plan["commands"])
+        self.assertIn("phase4-offline --write", plan["commands"])
         self.assertIn("cliente-app-package --write", plan["commands"])
+        generation_commands = [" ".join(step[2]) for step in GENERATION_STEPS]
+        self.assertIn("cartography-plan --write", generation_commands)
+        self.assertIn("schematic-maps --write", generation_commands)
         self.assertFalse(plan["administrative_ready"])
         self.assertIn("gates", plan["note"].lower())
 
@@ -134,6 +139,22 @@ class TestClientBackend(unittest.TestCase):
         self.assertEqual(status["status"], "NOT_STARTED")
         self.assertEqual(status["outputs"], [])
         self.assertFalse(status["administrative_ready"])
+
+    def test_generation_status_lists_visual_outputs(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+        exp_path = Path(result.expediente_path)
+        maps_dir = exp_path / "cartografia" / "mapas"
+        climate_dir = exp_path / "clima"
+        maps_dir.mkdir(parents=True, exist_ok=True)
+        climate_dir.mkdir(parents=True, exist_ok=True)
+        (maps_dir / "MAP-001_situacion.png").write_bytes(b"PNG-MAP")
+        (climate_dir / "climograma.png").write_bytes(b"PNG-CLIMA")
+
+        status = get_generation_status(self.tmp, result.project_id)
+        labels = {item["name"]: item["label"] for item in status["outputs"]}
+
+        self.assertEqual(labels["MAP-001_situacion.png"], "Mapa/plano")
+        self.assertEqual(labels["climograma.png"], "Climograma")
 
     def test_get_backend_project_supports_resuming_work(self):
         result = create_project_from_payload(self.tmp, self._payload())
