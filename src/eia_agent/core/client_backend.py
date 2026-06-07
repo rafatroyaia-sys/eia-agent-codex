@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
+from eia_agent.core.client_official_maps import generate_client_official_maps
 from eia_agent.core.expediente_initializer import initialize_expediente, sanitize_expediente_id
 
 
@@ -76,6 +77,7 @@ GENERATION_STEPS = [
     ("FASE_3", "Preparar el encuadre normativo", ["phase3", "--write"]),
     ("CARTOGRAFIA_PLAN", "Preparar plan cartografico desde coordenadas", ["cartography-plan", "--write"]),
     ("CARTOGRAFIA_MAPAS", "Generar mapas tecnicos provisionales", ["schematic-maps", "--write"]),
+    ("CARTOGRAFIA_OFICIAL", "Consultar cartografia oficial disponible", ["__official_maps__"]),
     ("DOCUMENTO", "Generar borrador tecnico y control documental", ["cliente-da", "--write"]),
 ]
 _GENERATION_LOCK = threading.Lock()
@@ -556,6 +558,19 @@ def _run_generation(workspace: Path, project_id: str) -> None:
             status["current_step"] = step_id
             status["message"] = label
             _write_generation_status(exp_path, status)
+            if args == ["__official_maps__"]:
+                official_result = generate_client_official_maps(exp_path, write_outputs=True)
+                step_status = "OK" if official_result.get("status") != "WARNING" else "WARNING"
+                step = {
+                    "step_id": step_id,
+                    "label": label,
+                    "return_code": 0,
+                    "status": step_status,
+                    "summary": "; ".join(official_result.get("warnings") or [])
+                    or f"Estado cartografia oficial: {official_result.get('status')}",
+                }
+                status["steps"].append(step)
+                continue
             result = subprocess.run(
                 [sys.executable, str(runner), str(exp_path), *args],
                 cwd=str(runner.parent),
