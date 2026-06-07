@@ -25,6 +25,8 @@ RED_NATURA_WMS_URL = "https://wms.mapama.gob.es/sig/Biodiversidad/RedNatura/wms.
 RED_NATURA_LAYER = "PS.ProtectedSite"
 PNOA_WMS_URL = "https://www.ign.es/wms-inspire/pnoa-ma"
 PNOA_LAYER = "OI.OrthoimageCoverage"
+SNCZI_Q500_WMS_URL = "https://wms.mapama.gob.es/sig/agua/ZI_LaminasQ500/wms.aspx"
+SNCZI_Q500_LAYER = "NZ.RiskZone"
 
 
 @dataclass(frozen=True)
@@ -154,6 +156,19 @@ def build_pnoa_ortofoto_wms_url(lat: float, lon: float, width: int = 1200, heigh
     )
 
 
+def build_snczi_q500_wms_url(lat: float, lon: float, width: int = 1200, height: int = 900) -> str:
+    """URL GetMap para zonas inundables SNCZI T=500 con CRS EPSG:4326."""
+    return build_wms_getmap_url(
+        lat,
+        lon,
+        wms_url=SNCZI_Q500_WMS_URL,
+        layer=SNCZI_Q500_LAYER,
+        transparent=False,
+        width=width,
+        height=height,
+    )
+
+
 OFFICIAL_WMS_SPECS: tuple[OfficialWmsSpec, ...] = (
     OfficialWmsSpec(
         map_id="MAP-OFICIAL-001",
@@ -189,6 +204,18 @@ OFFICIAL_WMS_SPECS: tuple[OfficialWmsSpec, ...] = (
         warning=(
             "Ortofoto oficial de apoyo generada por WMS. Debe revisarse escala, fecha "
             "y adecuacion al ambito exacto del proyecto."
+        ),
+    ),
+    OfficialWmsSpec(
+        map_id="MAP-OFICIAL-004",
+        title="Zonas inundables SNCZI T500 del entorno",
+        output_filename="MAP-OFICIAL-004_inundabilidad_snczi_t500.png",
+        source="MITECO WMS - SNCZI zonas inundables T=500",
+        wms_url=SNCZI_Q500_WMS_URL,
+        layer=SNCZI_Q500_LAYER,
+        warning=(
+            "Mapa oficial de apoyo generado por WMS. La existencia o ausencia de zona "
+            "inundable debe verificarse con consulta GIS, demarcacion hidrografica y escala adecuada."
         ),
     ),
 )

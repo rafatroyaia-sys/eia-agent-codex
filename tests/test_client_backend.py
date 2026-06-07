@@ -196,6 +196,19 @@ class TestClientBackend(unittest.TestCase):
         self.assertEqual(item["label"], "Mapa oficial Ortofoto")
         self.assertEqual(item["kind"], "OFFICIAL_ORTHOPHOTO_MAP")
 
+    def test_generation_status_lists_flood_outputs(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+        exp_path = Path(result.expediente_path)
+        maps_dir = exp_path / "cartografia" / "mapas"
+        maps_dir.mkdir(parents=True, exist_ok=True)
+        (maps_dir / "MAP-OFICIAL-004_inundabilidad_snczi_t500.png").write_bytes(b"PNG-MAP")
+
+        status = get_generation_status(self.tmp, result.project_id)
+        item = next(x for x in status["outputs"] if x["name"] == "MAP-OFICIAL-004_inundabilidad_snczi_t500.png")
+
+        self.assertEqual(item["label"], "Mapa oficial Inundabilidad")
+        self.assertEqual(item["kind"], "OFFICIAL_FLOOD_MAP")
+
     def test_get_backend_project_supports_resuming_work(self):
         result = create_project_from_payload(self.tmp, self._payload())
 
