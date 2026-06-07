@@ -296,6 +296,28 @@ def build_new_project_app_html(
       border-bottom: 1px solid var(--line);
       padding: 8px 0;
     }}
+    .missing-list {{
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }}
+    .missing-list li {{
+      background: #fffdf8;
+      border: 1px solid #f0d391;
+      border-left: 4px solid #d99b20;
+      border-radius: 6px;
+      padding: 9px 10px;
+      color: #5f3a00;
+      font-size: 13px;
+    }}
+    .missing-list li.ok {{
+      background: #f6fff9;
+      border-color: #bde4c9;
+      border-left-color: var(--ok);
+      color: #184f35;
+    }}
     .project-list {{ display: grid; gap: 8px; }}
     .project-item {{
       width: 100%;
@@ -446,6 +468,8 @@ def build_new_project_app_html(
         <div class="project-list" id="project-list"></div>
         <h3>Control de minimos</h3>
         <ul class="checklist" id="checklist"></ul>
+        <h3>Que falta ahora</h3>
+        <ul class="missing-list" id="missing-list"></ul>
       </aside>
       <div>
         <section class="panel">
@@ -536,6 +560,14 @@ def build_new_project_app_html(
       activity_type: 'tipo de actividad',
       object_description: 'descripcion del objeto evaluado'
     }};
+    const fieldActions = {{
+      project_name: 'Escriba el nombre del proyecto tal como quiere verlo en el informe.',
+      promoter: 'Indique la razon social o titular que presentara el Documento Ambiental.',
+      location: 'Complete isla, municipio y direccion o paraje.',
+      coordinates_wgs84: 'Introduzca las coordenadas en formato latitud, longitud.',
+      activity_type: 'Seleccione el tipo de actividad.',
+      object_description: 'Describa operaciones, superficies, procesos y limites del proyecto.'
+    }};
     let backendOnline = false;
     let backendProjectId = '';
     let backendProjects = [];
@@ -551,6 +583,9 @@ def build_new_project_app_html(
     function fileMeta(controlId) {{
       const input = document.getElementById(`file-${{controlId}}`);
       return Array.from(input?.files || []).map((f) => ({{ name: f.name, size_bytes: f.size, type: f.type || 'unknown' }}));
+    }}
+    function uploadLabel(controlId) {{
+      return controls.find((c) => c.control_id === controlId)?.label || controlId;
     }}
     function currentProject() {{
       const data = {{
@@ -584,15 +619,20 @@ def build_new_project_app_html(
     }}
     function validate(data) {{
       const missingFields = essentialFields.filter((id) => !data.project[id]);
-      const missingFiles = data.files.filter((f) => f.required && f.priority === 'ALTA' && f.selected_files.length === 0).map((f) => f.control_id);
+      const missingFiles = data.files.filter((f) => f.required && f.priority === 'ALTA' && f.selected_files.length === 0);
       const coordinateOk = /^-?\\d{{1,2}}([\\.,]\\d+)?\\s*,\\s*-?\\d{{1,3}}([\\.,]\\d+)?$/.test(data.project.coordinates_wgs84 || '');
-      const blockers = [...missingFields.map((id) => `Falta dato esencial: ${{id}}`), ...missingFiles.map((id) => `Falta bloque documental ALTA: ${{id}}`)];
-      if (data.project.coordinates_wgs84 && !coordinateOk) blockers.push('Formato de coordenadas WGS84 no reconocido');
+      const blockers = [
+        ...missingFields.map((id) => fieldActions[id] || `Complete ${{fieldLabels[id] || id}}.`),
+        ...missingFiles.map((f) => `Suba ${{f.label.toLowerCase()}}.`)
+      ];
+      if (data.project.coordinates_wgs84 && !coordinateOk) blockers.push('Revise las coordenadas: use el formato latitud, longitud. Ejemplo: 28.123456, -16.123456.');
       return {{
         essential_complete: essentialFields.length - missingFields.length,
         essential_total: essentialFields.length,
         high_files_complete: data.files.filter((f) => f.required && f.priority === 'ALTA' && f.selected_files.length > 0).length,
         high_files_total: data.files.filter((f) => f.required && f.priority === 'ALTA').length,
+        missing_fields: missingFields,
+        missing_high_files: missingFiles.map((f) => f.control_id),
         coordinate_format_ok: coordinateOk,
         blockers,
         ready_for_engine: blockers.length === 0
@@ -626,6 +666,29 @@ def build_new_project_app_html(
         li.innerHTML = `<span>${{label}}</span><span class="pill ${{ok ? 'ok' : 'warn'}}">${{ok ? 'OK' : 'Pendiente'}}</span>`;
         list.appendChild(li);
       }});
+      renderMissingList(data);
+    }}
+    function renderMissingList(data) {{
+      const box = document.getElementById('missing-list');
+      box.innerHTML = '';
+      const messages = [];
+      data.validation.missing_fields.forEach((id) => messages.push(fieldActions[id] || `Complete ${{fieldLabels[id] || id}}.`));
+      if (data.project.coordinates_wgs84 && !data.validation.coordinate_format_ok) {{
+        messages.push('Corrija las coordenadas: deben ir como latitud, longitud.');
+      }}
+      data.validation.missing_high_files.forEach((id) => messages.push(`Suba ${{uploadLabel(id).toLowerCase()}}.`));
+      if (!messages.length) {{
+        const li = document.createElement('li');
+        li.className = 'ok';
+        li.textContent = backendProjectId ? 'Entrada minima completa. Ya puede validar y generar.' : 'Entrada minima completa. Guarde el expediente y suba los archivos.';
+        box.appendChild(li);
+        return;
+      }}
+      messages.slice(0, 6).forEach((message) => {{
+        const li = document.createElement('li');
+        li.textContent = message;
+        box.appendChild(li);
+      }});
     }}
     function updateGuidance(data) {{
       const title = document.getElementById('next-action-title');
@@ -643,7 +706,7 @@ def build_new_project_app_html(
       const missingHighFiles = data.files.filter((f) => f.required && f.priority === 'ALTA' && f.selected_files.length === 0);
       if (missingHighFiles.length) {{
         title.textContent = 'Siguiente paso: subir documentos prioritarios';
-        copy.textContent = `Falta cargar: ${{missingHighFiles.map((f) => f.control_id).join(', ')}}. La app puede seguir con documentos recomendados pendientes, pero no con estos minimos.`;
+        copy.textContent = `Falta cargar: ${{missingHighFiles.map((f) => f.label.toLowerCase()).join(', ')}}. La app puede seguir con documentos recomendados pendientes, pero no con estos minimos.`;
         return;
       }}
       if (!backendProjectId) {{
@@ -669,7 +732,7 @@ def build_new_project_app_html(
       backendProjects.forEach((item) => {{
         const btn = document.createElement('button');
         btn.className = 'project-item';
-        btn.textContent = `${{item.project_name}} · servidor`;
+        btn.textContent = `${{item.project_name}} - servidor`;
         btn.addEventListener('click', () => loadBackendProject(item.project_id));
         box.appendChild(btn);
       }});
