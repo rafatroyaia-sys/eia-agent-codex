@@ -401,6 +401,36 @@ def build_new_project_app_html(
       border-radius: inherit;
       transition: width .2s ease;
     }}
+    .deliverable-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0 18px;
+    }}
+    .deliverable-card {{
+      background: #f8fffa;
+      border: 1px solid #bde4c9;
+      border-left: 5px solid var(--brand-2);
+      border-radius: 8px;
+      padding: 12px;
+      min-width: 0;
+    }}
+    .deliverable-card strong {{
+      display: block;
+      margin-bottom: 5px;
+      overflow-wrap: anywhere;
+    }}
+    .deliverable-card span {{
+      display: block;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }}
+    .deliverable-card.client {{
+      background: #fffdf8;
+      border-color: #f0d391;
+      border-left-color: #d99b20;
+    }}
     .generation-box {{
       border: 1px solid var(--line);
       background: #f8fafc;
@@ -453,7 +483,7 @@ def build_new_project_app_html(
     }}
     button:disabled {{ opacity: .45; cursor: not-allowed; }}
     @media (max-width: 980px) {{
-      .layout, .summary, .workflow {{ grid-template-columns: 1fr; }}
+      .layout, .summary, .workflow, .deliverable-grid {{ grid-template-columns: 1fr; }}
       .guidance {{ grid-template-columns: 1fr; }}
       header {{ padding: 24px 20px; }}
       main {{ padding: 16px; }}
@@ -563,6 +593,23 @@ def build_new_project_app_html(
         </section>
         <section class="panel">
           <h2>3. Cartografia, planos y clima esperados</h2>
+          <div class="note">
+            Con las coordenadas WGS84 la app intenta generar automaticamente la cartografia base oficial disponible. El cliente solo debe aportar planos propios o cartografia especifica cuando los tenga.
+          </div>
+          <div class="deliverable-grid" aria-label="Entregables cartograficos">
+            <div class="deliverable-card">
+              <strong>Mapas automaticos</strong>
+              <span>Localizacion, delimitacion, ortofoto, catastro, Red Natura 2000, inundabilidad y esquemas de apoyo cuando los servicios oficiales respondan.</span>
+            </div>
+            <div class="deliverable-card">
+              <strong>Clima y contexto</strong>
+              <span>Climograma y resumen climatico para integrarlos en el Documento Ambiental y en sus anejos de soporte.</span>
+            </div>
+            <div class="deliverable-card client">
+              <strong>Planos del cliente</strong>
+              <span>Implantacion, distribucion, procesos, almacenamiento, maquinaria, accesos o cualquier plano tecnico propio del proyecto.</span>
+            </div>
+          </div>
           <div class="table-wrap">
             <table>
               <thead><tr><th>ID</th><th>Mapa/plano</th><th>Prioridad</th><th>Capas minimas</th></tr></thead>

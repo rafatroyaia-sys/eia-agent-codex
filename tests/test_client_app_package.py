@@ -171,6 +171,8 @@ class TestClientAppPackage(unittest.TestCase):
         self.assertIn("Vista previa de mapas, planos y climograma", html)
         self.assertIn("loadVisualPreviews", html)
         self.assertIn("CLIMOGRAM", html)
+        self.assertIn("Mapas automaticos", html)
+        self.assertIn("Planos del cliente", html)
         self.assertIn("alta_proyecto", blueprint["workflow"][0]["step"])
         self.assertIn("coordinates_wgs84", blueprint["minimum_project_fields"])
         self.assertGreaterEqual(len(blueprint["map_requirements"]), 12)
