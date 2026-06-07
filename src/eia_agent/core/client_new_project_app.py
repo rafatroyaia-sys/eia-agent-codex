@@ -599,7 +599,7 @@ def build_new_project_app_html(
           <div class="deliverable-grid" aria-label="Entregables cartograficos">
             <div class="deliverable-card">
               <strong>Mapas automaticos</strong>
-              <span>Localizacion, delimitacion, ortofoto, catastro, Red Natura 2000, inundabilidad y esquemas de apoyo cuando los servicios oficiales respondan.</span>
+              <span>Localizacion, delimitacion, ortofoto, topografico IGN, catastro, Red Natura 2000, inundabilidad y esquemas de apoyo cuando los servicios oficiales respondan.</span>
             </div>
             <div class="deliverable-card">
               <strong>Clima y contexto</strong>

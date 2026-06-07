@@ -27,6 +27,8 @@ PNOA_WMS_URL = "https://www.ign.es/wms-inspire/pnoa-ma"
 PNOA_LAYER = "OI.OrthoimageCoverage"
 SNCZI_Q500_WMS_URL = "https://wms.mapama.gob.es/sig/agua/ZI_LaminasQ500/wms.aspx"
 SNCZI_Q500_LAYER = "NZ.RiskZone"
+IGN_RASTER_WMS_URL = "https://www.ign.es/wms-inspire/mapa-raster"
+IGN_RASTER_LAYER = "mtn_rasterizado"
 
 
 @dataclass(frozen=True)
@@ -169,6 +171,19 @@ def build_snczi_q500_wms_url(lat: float, lon: float, width: int = 1200, height: 
     )
 
 
+def build_ign_topographic_wms_url(lat: float, lon: float, width: int = 1200, height: int = 900) -> str:
+    """URL GetMap para mapa topografico raster IGN con CRS EPSG:4326."""
+    return build_wms_getmap_url(
+        lat,
+        lon,
+        wms_url=IGN_RASTER_WMS_URL,
+        layer=IGN_RASTER_LAYER,
+        transparent=False,
+        width=width,
+        height=height,
+    )
+
+
 OFFICIAL_WMS_SPECS: tuple[OfficialWmsSpec, ...] = (
     OfficialWmsSpec(
         map_id="MAP-OFICIAL-001",
@@ -216,6 +231,18 @@ OFFICIAL_WMS_SPECS: tuple[OfficialWmsSpec, ...] = (
         warning=(
             "Mapa oficial de apoyo generado por WMS. La existencia o ausencia de zona "
             "inundable debe verificarse con consulta GIS, demarcacion hidrografica y escala adecuada."
+        ),
+    ),
+    OfficialWmsSpec(
+        map_id="MAP-OFICIAL-005",
+        title="Mapa topografico oficial IGN del entorno",
+        output_filename="MAP-OFICIAL-005_topografico_ign.png",
+        source="IGN/CNIG WMS - Cartografia raster MTN",
+        wms_url=IGN_RASTER_WMS_URL,
+        layer=IGN_RASTER_LAYER,
+        warning=(
+            "Mapa topografico oficial de apoyo generado por WMS. Debe revisarse la "
+            "escala de salida y completar pendientes/curvas con analisis GIS si el expediente lo exige."
         ),
     ),
 )
