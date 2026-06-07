@@ -409,6 +409,48 @@ def build_new_project_app_html(
       margin-top: 14px;
     }}
     .generation-box ul {{ margin: 8px 0 0; padding-left: 20px; }}
+    .output-actions {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }}
+    .output-gallery {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 12px;
+      margin-top: 14px;
+    }}
+    .output-card {{
+      display: grid;
+      gap: 9px;
+      background: white;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      min-width: 0;
+    }}
+    .output-card img {{
+      width: 100%;
+      aspect-ratio: 16 / 10;
+      object-fit: contain;
+      background: #eef5f0;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }}
+    .output-card strong {{
+      display: block;
+      overflow-wrap: anywhere;
+    }}
+    .output-meta {{
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }}
+    .output-card .output-download {{
+      width: 100%;
+      min-height: 42px;
+    }}
     button:disabled {{ opacity: .45; cursor: not-allowed; }}
     @media (max-width: 980px) {{
       .layout, .summary, .workflow {{ grid-template-columns: 1fr; }}
@@ -898,12 +940,77 @@ def build_new_project_app_html(
     function renderGeneration(title, message, items = [], outputs = []) {{
       const box = document.getElementById('generation-box');
       const list = items.length ? `<ul>${{items.map((item) => `<li>${{item}}</li>`).join('')}}</ul>` : '';
-      const files = outputs.length
-        ? `<div class="actions">${{outputs.map((item, idx) => `<button class="secondary output-download" data-output="${{idx}}">${{item.label || 'Descargar'}}: ${{item.name}}</button>`).join('')}}</div>`
-        : '';
-      box.innerHTML = `<strong>${{title}}</strong><p class="muted">${{message || ''}}</p>${{list}}${{files}}`;
+      const visualOutputs = outputs.filter(isVisualOutput);
+      const documentOutputs = outputs.filter((item) => !isVisualOutput(item));
+      const files = renderOutputButtons(documentOutputs);
+      const gallery = renderVisualGallery(visualOutputs);
+      box.innerHTML = `<strong>${{title}}</strong><p class="muted">${{message || ''}}</p>${{list}}${{files}}${{gallery}}`;
+      documentOutputs.forEach((item, idx) => {{
+        box.querySelector(`[data-document-output="${{idx}}"]`)?.addEventListener('click', () => downloadOutput(item));
+      }});
+      visualOutputs.forEach((item, idx) => {{
+        box.querySelector(`[data-visual-output="${{idx}}"]`)?.addEventListener('click', () => downloadOutput(item));
+      }});
+      loadVisualPreviews(visualOutputs);
+    }}
+    function isVisualOutput(item) {{
+      const kind = String(item.kind || '').toUpperCase();
+      const name = String(item.name || '').toLowerCase();
+      return (
+        kind.includes('MAP') ||
+        kind.includes('CLIMOGRAM') ||
+        kind.includes('ORTHOPHOTO') ||
+        name.endsWith('.png') ||
+        name.endsWith('.jpg') ||
+        name.endsWith('.jpeg')
+      );
+    }}
+    function renderOutputButtons(outputs = []) {{
+      if (!outputs.length) return '';
+      return `<div class="output-actions">${{outputs.map((item, idx) => `<button class="secondary output-download" data-document-output="${{idx}}">${{escapeHtml(item.label || 'Descargar documento')}}: ${{escapeHtml(item.name || '')}}</button>`).join('')}}</div>`;
+    }}
+    function escapeHtml(value) {{
+      return String(value || '').replace(/[&<>"']/g, (char) => ({{
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }}[char]));
+    }}
+    function renderVisualGallery(outputs = []) {{
+      if (!outputs.length) return '';
+      return `
+        <div class="output-gallery" aria-label="Vista previa de mapas, planos y climograma">
+          ${{outputs.map((item, idx) => `
+            <article class="output-card">
+              <img data-preview-output="${{idx}}" alt="${{escapeHtml(item.label || item.name || 'Mapa generado')}}" />
+              <strong>${{escapeHtml(item.label || item.name || 'Salida visual')}}</strong>
+              <span class="output-meta">${{escapeHtml(item.name || '')}}</span>
+              <button class="secondary output-download" data-visual-output="${{idx}}">Descargar imagen</button>
+            </article>
+          `).join('')}}
+        </div>
+      `;
+    }}
+    async function loadVisualPreviews(outputs = []) {{
       outputs.forEach((item, idx) => {{
-        box.querySelector(`[data-output="${{idx}}"]`)?.addEventListener('click', () => downloadOutput(item));
+        const img = document.querySelector(`[data-preview-output="${{idx}}"]`);
+        if (!img || !item.download_url) return;
+        fetch(item.download_url, {{ headers: apiHeaders(false), cache: 'no-store' }})
+          .then((res) => {{
+            if (!res.ok) throw new Error('preview failed');
+            return res.blob();
+          }})
+          .then((blob) => {{
+            img.src = URL.createObjectURL(blob);
+          }})
+          .catch(() => {{
+            img.replaceWith(Object.assign(document.createElement('div'), {{
+              className: 'note',
+              textContent: 'Vista previa no disponible. Puede descargar la imagen.'
+            }}));
+          }});
       }});
     }}
     async function validateInBackend() {{
