@@ -21,6 +21,22 @@ from urllib.request import urlopen
 CLIENT_ENTRY_FILE = "control_interno/entrada_cliente.json"
 CATASTRO_WMS_URL = "https://ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx"
 CATASTRO_LAYER = "Catastro"
+RED_NATURA_WMS_URL = "https://wms.mapama.gob.es/sig/Biodiversidad/RedNatura/wms.aspx"
+RED_NATURA_LAYER = "PS.ProtectedSite"
+
+
+@dataclass(frozen=True)
+class OfficialWmsSpec:
+    """Especificacion de mapa oficial WMS para el flujo cliente."""
+
+    map_id: str
+    title: str
+    output_filename: str
+    source: str
+    wms_url: str
+    layer: str
+    transparent: bool = False
+    warning: str = "Mapa oficial de apoyo generado por WMS. Requiere revision tecnica."
 
 
 @dataclass
@@ -70,23 +86,85 @@ def build_bbox(lat: float, lon: float, buffer_m: int = 550) -> tuple[float, floa
     return lon - lon_delta, lat - lat_delta, lon + lon_delta, lat + lat_delta
 
 
-def build_catastro_wms_url(lat: float, lon: float, width: int = 1200, height: int = 900) -> str:
-    """URL GetMap para cartografia catastral WMS con CRS EPSG:4326."""
+def build_wms_getmap_url(
+    lat: float,
+    lon: float,
+    *,
+    wms_url: str,
+    layer: str,
+    transparent: bool = False,
+    width: int = 1200,
+    height: int = 900,
+) -> str:
+    """URL GetMap para WMS con CRS EPSG:4326."""
     bbox = build_bbox(lat, lon)
     params = {
         "SERVICE": "WMS",
         "VERSION": "1.1.1",
         "REQUEST": "GetMap",
-        "LAYERS": CATASTRO_LAYER,
+        "LAYERS": layer,
         "STYLES": "",
         "SRS": "EPSG:4326",
         "BBOX": ",".join(f"{n:.8f}" for n in bbox),
         "WIDTH": str(width),
         "HEIGHT": str(height),
         "FORMAT": "image/png",
-        "TRANSPARENT": "FALSE",
+        "TRANSPARENT": "TRUE" if transparent else "FALSE",
     }
-    return f"{CATASTRO_WMS_URL}?{urlencode(params)}"
+    return f"{wms_url}?{urlencode(params)}"
+
+
+def build_catastro_wms_url(lat: float, lon: float, width: int = 1200, height: int = 900) -> str:
+    """URL GetMap para cartografia catastral WMS con CRS EPSG:4326."""
+    return build_wms_getmap_url(
+        lat,
+        lon,
+        wms_url=CATASTRO_WMS_URL,
+        layer=CATASTRO_LAYER,
+        width=width,
+        height=height,
+    )
+
+
+def build_red_natura_wms_url(lat: float, lon: float, width: int = 1200, height: int = 900) -> str:
+    """URL GetMap para Red Natura 2000 MITECO con CRS EPSG:4326."""
+    return build_wms_getmap_url(
+        lat,
+        lon,
+        wms_url=RED_NATURA_WMS_URL,
+        layer=RED_NATURA_LAYER,
+        transparent=False,
+        width=width,
+        height=height,
+    )
+
+
+OFFICIAL_WMS_SPECS: tuple[OfficialWmsSpec, ...] = (
+    OfficialWmsSpec(
+        map_id="MAP-OFICIAL-001",
+        title="Cartografia catastral oficial del entorno",
+        output_filename="MAP-OFICIAL-001_catastro_parcela.png",
+        source="Catastro WMS - Direccion General del Catastro",
+        wms_url=CATASTRO_WMS_URL,
+        layer=CATASTRO_LAYER,
+        warning=(
+            "Mapa oficial de apoyo generado por WMS. La delimitacion exacta de parcela "
+            "debe verificarse con referencia catastral o geometria aportada."
+        ),
+    ),
+    OfficialWmsSpec(
+        map_id="MAP-OFICIAL-002",
+        title="Red Natura 2000 y espacios protegidos de referencia",
+        output_filename="MAP-OFICIAL-002_red_natura_2000.png",
+        source="MITECO WMS - Red Natura 2000",
+        wms_url=RED_NATURA_WMS_URL,
+        layer=RED_NATURA_LAYER,
+        warning=(
+            "Mapa oficial de apoyo generado por WMS. Las distancias y afecciones deben "
+            "verificarse con analisis GIS y cartografia vigente."
+        ),
+    ),
+)
 
 
 def _default_fetcher(url: str) -> bytes:
@@ -105,13 +183,61 @@ def _looks_like_png(data: bytes) -> bool:
     return data.startswith(b"\x89PNG\r\n\x1a\n")
 
 
+def _generate_one_wms_map(
+    exp_path: Path,
+    lat: float,
+    lon: float,
+    spec: OfficialWmsSpec,
+    fetcher: Callable[[str], bytes],
+    write_outputs: bool,
+) -> tuple[OfficialMapResult, str | None]:
+    url = build_wms_getmap_url(
+        lat,
+        lon,
+        wms_url=spec.wms_url,
+        layer=spec.layer,
+        transparent=spec.transparent,
+    )
+    out_rel = f"cartografia/mapas/{spec.output_filename}"
+    out_path = exp_path / out_rel
+    try:
+        data = fetcher(url)
+        if not _looks_like_png(data):
+            raise ValueError("La respuesta WMS no es una imagen PNG valida.")
+        if write_outputs:
+            out_path.parent.mkdir(parents=True, exist_ok=True)
+            out_path.write_bytes(data)
+        return (
+            OfficialMapResult(
+                map_id=spec.map_id,
+                title=spec.title,
+                status="GENERATED_REQUIRES_REVIEW",
+                source=spec.source,
+                output_path=out_rel if write_outputs else None,
+                warnings=[spec.warning],
+            ),
+            None,
+        )
+    except Exception as exc:
+        return (
+            OfficialMapResult(
+                map_id=spec.map_id,
+                title=spec.title,
+                status="NOT_AVAILABLE",
+                source=spec.source,
+                warnings=["Se mantiene la cartografia provisional y se requiere verificacion posterior."],
+            ),
+            f"No se pudo descargar {spec.title}: {exc}",
+        )
+
+
 def generate_client_official_maps(
     expediente_path: str | Path,
     *,
     fetcher: Callable[[str], bytes] | None = None,
     write_outputs: bool = True,
 ) -> dict[str, Any]:
-    """Genera primer mapa oficial cliente desde Catastro WMS.
+    """Genera mapas oficiales cliente desde servicios WMS publicos.
 
     Devuelve siempre un estado prudente. Los errores de red o de servicio se
     registran como WARNING, no como excepcion bloqueante.
@@ -128,41 +254,22 @@ def generate_client_official_maps(
         status = "SKIPPED"
     else:
         lat, lon = parsed
-        url = build_catastro_wms_url(lat, lon)
-        out_rel = "cartografia/mapas/MAP-OFICIAL-001_catastro_parcela.png"
-        out_path = exp_path / out_rel
-        source = "Catastro WMS - Direccion General del Catastro"
-        try:
-            data = (fetcher or _default_fetcher)(url)
-            if not _looks_like_png(data):
-                raise ValueError("La respuesta WMS no es una imagen PNG valida.")
-            if write_outputs:
-                out_path.parent.mkdir(parents=True, exist_ok=True)
-                out_path.write_bytes(data)
-            generated.append(
-                OfficialMapResult(
-                    map_id="MAP-OFICIAL-001",
-                    title="Cartografia catastral oficial del entorno",
-                    status="GENERATED_REQUIRES_REVIEW",
-                    source=source,
-                    output_path=out_rel if write_outputs else None,
-                    warnings=[
-                        "Mapa oficial de apoyo generado por WMS. La delimitacion exacta de parcela debe verificarse con referencia catastral o geometria aportada.",
-                    ],
-                )
+        active_fetcher = fetcher or _default_fetcher
+        for spec in OFFICIAL_WMS_SPECS:
+            map_result, warning = _generate_one_wms_map(
+                exp_path,
+                lat,
+                lon,
+                spec,
+                active_fetcher,
+                write_outputs,
             )
+            generated.append(map_result)
+            if warning:
+                warnings.append(warning)
+        if any(item.status == "GENERATED_REQUIRES_REVIEW" for item in generated):
             status = "GENERATED_WITH_REVIEW"
-        except Exception as exc:  # pragma: no cover - cubierto indirectamente con fetcher en tests
-            warnings.append(f"No se pudo descargar Catastro WMS: {exc}")
-            generated.append(
-                OfficialMapResult(
-                    map_id="MAP-OFICIAL-001",
-                    title="Cartografia catastral oficial del entorno",
-                    status="NOT_AVAILABLE",
-                    source=source,
-                    warnings=["Se mantiene la cartografia provisional y se requiere verificacion posterior."],
-                )
-            )
+        else:
             status = "WARNING"
 
     result = {

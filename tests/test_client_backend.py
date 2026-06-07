@@ -167,8 +167,21 @@ class TestClientBackend(unittest.TestCase):
         status = get_generation_status(self.tmp, result.project_id)
         item = next(x for x in status["outputs"] if x["name"] == "MAP-OFICIAL-001_catastro_parcela.png")
 
-        self.assertEqual(item["label"], "Mapa/plano")
-        self.assertEqual(item["kind"], "CARTOGRAPHY_IMAGE")
+        self.assertEqual(item["label"], "Mapa oficial Catastro")
+        self.assertEqual(item["kind"], "OFFICIAL_CADASTRE_MAP")
+
+    def test_generation_status_lists_red_natura_outputs(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+        exp_path = Path(result.expediente_path)
+        maps_dir = exp_path / "cartografia" / "mapas"
+        maps_dir.mkdir(parents=True, exist_ok=True)
+        (maps_dir / "MAP-OFICIAL-002_red_natura_2000.png").write_bytes(b"PNG-MAP")
+
+        status = get_generation_status(self.tmp, result.project_id)
+        item = next(x for x in status["outputs"] if x["name"] == "MAP-OFICIAL-002_red_natura_2000.png")
+
+        self.assertEqual(item["label"], "Mapa oficial Red Natura")
+        self.assertEqual(item["kind"], "OFFICIAL_RED_NATURA_MAP")
 
     def test_get_backend_project_supports_resuming_work(self):
         result = create_project_from_payload(self.tmp, self._payload())

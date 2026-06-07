@@ -509,15 +509,25 @@ def list_generated_outputs(exp_path: Path) -> list[dict[str, Any]]:
             if not path.is_file() or path.suffix.lower() not in visual_allowed:
                 continue
             rel = str(path.relative_to(exp_path)).replace("\\", "/")
-            is_climate = "clima" in rel.lower() or "climograma" in path.name.lower()
+            rel_lower = rel.lower()
+            name_lower = path.name.lower()
+            is_climate = "clima" in rel_lower or "climograma" in name_lower
+            if "red_natura" in name_lower:
+                kind, label, priority = "OFFICIAL_RED_NATURA_MAP", "Mapa oficial Red Natura", 4
+            elif "catastro" in name_lower:
+                kind, label, priority = "OFFICIAL_CADASTRE_MAP", "Mapa oficial Catastro", 4
+            elif is_climate:
+                kind, label, priority = "CLIMOGRAM", "Climograma", 4
+            else:
+                kind, label, priority = "CARTOGRAPHY_IMAGE", "Mapa/plano", 5
             outputs.append({
                 "name": path.name,
                 "relative_path": rel,
                 "size_bytes": path.stat().st_size,
-                "kind": "CLIMOGRAM" if is_climate else "CARTOGRAPHY_IMAGE",
-                "label": "Climograma" if is_climate else "Mapa/plano",
+                "kind": kind,
+                "label": label,
                 "editable": False,
-                "priority": 4 if is_climate else 5,
+                "priority": priority,
                 "download_url": f"/api/projects/{exp_path.name}/outputs/{rel}",
             })
     return sorted(outputs, key=lambda item: (item["priority"], item["name"].lower()))
