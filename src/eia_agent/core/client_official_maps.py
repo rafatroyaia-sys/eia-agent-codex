@@ -23,6 +23,8 @@ CATASTRO_WMS_URL = "https://ovc.catastro.meh.es/Cartografia/WMS/ServidorWMS.aspx
 CATASTRO_LAYER = "Catastro"
 RED_NATURA_WMS_URL = "https://wms.mapama.gob.es/sig/Biodiversidad/RedNatura/wms.aspx"
 RED_NATURA_LAYER = "PS.ProtectedSite"
+PNOA_WMS_URL = "https://www.ign.es/wms-inspire/pnoa-ma"
+PNOA_LAYER = "OI.OrthoimageCoverage"
 
 
 @dataclass(frozen=True)
@@ -139,6 +141,19 @@ def build_red_natura_wms_url(lat: float, lon: float, width: int = 1200, height: 
     )
 
 
+def build_pnoa_ortofoto_wms_url(lat: float, lon: float, width: int = 1200, height: int = 900) -> str:
+    """URL GetMap para ortofoto PNOA maxima actualidad con CRS EPSG:4326."""
+    return build_wms_getmap_url(
+        lat,
+        lon,
+        wms_url=PNOA_WMS_URL,
+        layer=PNOA_LAYER,
+        transparent=False,
+        width=width,
+        height=height,
+    )
+
+
 OFFICIAL_WMS_SPECS: tuple[OfficialWmsSpec, ...] = (
     OfficialWmsSpec(
         map_id="MAP-OFICIAL-001",
@@ -162,6 +177,18 @@ OFFICIAL_WMS_SPECS: tuple[OfficialWmsSpec, ...] = (
         warning=(
             "Mapa oficial de apoyo generado por WMS. Las distancias y afecciones deben "
             "verificarse con analisis GIS y cartografia vigente."
+        ),
+    ),
+    OfficialWmsSpec(
+        map_id="MAP-OFICIAL-003",
+        title="Ortofoto PNOA maxima actualidad del emplazamiento",
+        output_filename="MAP-OFICIAL-003_ortofoto_pnoa.png",
+        source="IGN/CNIG WMS - PNOA maxima actualidad",
+        wms_url=PNOA_WMS_URL,
+        layer=PNOA_LAYER,
+        warning=(
+            "Ortofoto oficial de apoyo generada por WMS. Debe revisarse escala, fecha "
+            "y adecuacion al ambito exacto del proyecto."
         ),
     ),
 )

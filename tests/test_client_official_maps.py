@@ -7,6 +7,7 @@ from pathlib import Path
 
 from eia_agent.core.client_official_maps import (
     build_catastro_wms_url,
+    build_pnoa_ortofoto_wms_url,
     build_red_natura_wms_url,
     generate_client_official_maps,
     parse_wgs84_coordinates,
@@ -48,6 +49,14 @@ class TestClientOfficialMaps(unittest.TestCase):
         self.assertIn("SRS=EPSG%3A4326", url)
         self.assertIn("LAYERS=PS.ProtectedSite", url)
 
+    def test_build_pnoa_ortofoto_wms_url_contains_required_parameters(self):
+        url = build_pnoa_ortofoto_wms_url(28.963, -13.551)
+
+        self.assertIn("SERVICE=WMS", url)
+        self.assertIn("REQUEST=GetMap", url)
+        self.assertIn("SRS=EPSG%3A4326", url)
+        self.assertIn("LAYERS=OI.OrthoimageCoverage", url)
+
     def test_generate_client_official_maps_writes_png_with_fetcher(self):
         png = b"\x89PNG\r\n\x1a\n" + b"OFFICIAL"
 
@@ -60,9 +69,11 @@ class TestClientOfficialMaps(unittest.TestCase):
         self.assertEqual(result["status"], "GENERATED_WITH_REVIEW")
         out = self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-001_catastro_parcela.png"
         red = self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-002_red_natura_2000.png"
+        ortho = self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-003_ortofoto_pnoa.png"
         self.assertEqual(out.read_bytes(), png)
         self.assertEqual(red.read_bytes(), png)
-        self.assertEqual(len(result["maps"]), 2)
+        self.assertEqual(ortho.read_bytes(), png)
+        self.assertEqual(len(result["maps"]), 3)
         self.assertTrue((self.tmp / "cartografia" / "mapas_oficiales_cliente.json").exists())
         self.assertFalse(result["administrative_ready"])
 
@@ -81,6 +92,7 @@ class TestClientOfficialMaps(unittest.TestCase):
         self.assertEqual(result["status"], "SKIPPED")
         self.assertFalse((self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-001_catastro_parcela.png").exists())
         self.assertFalse((self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-002_red_natura_2000.png").exists())
+        self.assertFalse((self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-003_ortofoto_pnoa.png").exists())
 
 
 if __name__ == "__main__":

@@ -516,6 +516,8 @@ def list_generated_outputs(exp_path: Path) -> list[dict[str, Any]]:
                 kind, label, priority = "OFFICIAL_RED_NATURA_MAP", "Mapa oficial Red Natura", 4
             elif "catastro" in name_lower:
                 kind, label, priority = "OFFICIAL_CADASTRE_MAP", "Mapa oficial Catastro", 4
+            elif "ortofoto" in name_lower or "pnoa" in name_lower:
+                kind, label, priority = "OFFICIAL_ORTHOPHOTO_MAP", "Mapa oficial Ortofoto", 4
             elif is_climate:
                 kind, label, priority = "CLIMOGRAM", "Climograma", 4
             else:
