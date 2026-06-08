@@ -29,6 +29,8 @@ SNCZI_Q500_WMS_URL = "https://wms.mapama.gob.es/sig/agua/ZI_LaminasQ500/wms.aspx
 SNCZI_Q500_LAYER = "NZ.RiskZone"
 IGN_RASTER_WMS_URL = "https://www.ign.es/wms-inspire/mapa-raster"
 IGN_RASTER_LAYER = "mtn_rasterizado"
+NOISE_ROADS_LDEN_WMS_URL = "https://wms.mapama.gob.es/sig/EvaluacionAmbiental/Ruido/MER/Carreteras/Lden/wms.aspx"
+NOISE_ROADS_LDEN_LAYER = "AM.NoiseRestrictionZone"
 
 
 @dataclass(frozen=True)
@@ -184,6 +186,19 @@ def build_ign_topographic_wms_url(lat: float, lon: float, width: int = 1200, hei
     )
 
 
+def build_noise_roads_lden_wms_url(lat: float, lon: float, width: int = 1200, height: int = 900) -> str:
+    """URL GetMap para mapa estrategico de ruido de carreteras Lden con CRS EPSG:4326."""
+    return build_wms_getmap_url(
+        lat,
+        lon,
+        wms_url=NOISE_ROADS_LDEN_WMS_URL,
+        layer=NOISE_ROADS_LDEN_LAYER,
+        transparent=False,
+        width=width,
+        height=height,
+    )
+
+
 OFFICIAL_WMS_SPECS: tuple[OfficialWmsSpec, ...] = (
     OfficialWmsSpec(
         map_id="MAP-OFICIAL-001",
@@ -243,6 +258,19 @@ OFFICIAL_WMS_SPECS: tuple[OfficialWmsSpec, ...] = (
         warning=(
             "Mapa topografico oficial de apoyo generado por WMS. Debe revisarse la "
             "escala de salida y completar pendientes/curvas con analisis GIS si el expediente lo exige."
+        ),
+    ),
+    OfficialWmsSpec(
+        map_id="MAP-OFICIAL-006",
+        title="Mapa estrategico de ruido de carreteras Lden",
+        output_filename="MAP-OFICIAL-006_ruido_carreteras_lden.png",
+        source="MITECO WMS - Mapas estrategicos de ruido de carreteras Lden",
+        wms_url=NOISE_ROADS_LDEN_WMS_URL,
+        layer=NOISE_ROADS_LDEN_LAYER,
+        warning=(
+            "Mapa estrategico de ruido de apoyo generado por WMS. No sustituye un "
+            "estudio acustico ni mediciones in situ; debe revisarse la escala, fuente, "
+            "vigencia y aplicabilidad al proyecto."
         ),
     ),
 )

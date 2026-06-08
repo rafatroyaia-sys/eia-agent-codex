@@ -69,7 +69,8 @@ _MAPA_KEYWORDS = frozenset({
     "mapa", "map", "cartografia", "situacion", "emplazamiento",
     "parcela", "red_natura", "inundabilidad", "usos_suelo",
     "catastral", "ortofoto", "geologia", "litologia", "espacios",
-    "zonificacion", "ubicacion",
+    "zonificacion", "ubicacion", "ruido", "acustico", "acustica",
+    "lden", "sonoro",
 })
 _CLIMOGRAMA_KEYWORDS = frozenset({
     "climograma", "climate", "clima", "aemet", "koppen", "martonne",

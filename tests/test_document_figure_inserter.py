@@ -211,6 +211,9 @@ class TestDetectFigureType(unittest.TestCase):
     def test_red_natura(self):
         self.assertEqual(detect_figure_type("map004_red_natura.png"), "MAPA")
 
+    def test_ruido_lden(self):
+        self.assertEqual(detect_figure_type("MAP-OFICIAL-006_ruido_carreteras_lden.png"), "MAPA")
+
 
 # ---------------------------------------------------------------------------
 # 4. Tests de build_figure_title y build_figure_caption

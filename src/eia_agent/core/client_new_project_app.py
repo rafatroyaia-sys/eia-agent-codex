@@ -599,11 +599,11 @@ def build_new_project_app_html(
           <div class="deliverable-grid" aria-label="Entregables cartograficos">
             <div class="deliverable-card">
               <strong>Mapas automaticos</strong>
-              <span>Localizacion, delimitacion, ortofoto, topografico IGN, catastro, Red Natura 2000, inundabilidad y esquemas de apoyo cuando los servicios oficiales respondan.</span>
+              <span>Localizacion, delimitacion, ortofoto, topografico IGN, catastro, Red Natura 2000, inundabilidad, ruido de carreteras Lden y esquemas de apoyo cuando los servicios oficiales respondan.</span>
             </div>
             <div class="deliverable-card">
               <strong>Clima y contexto</strong>
-              <span>Climograma y resumen climatico para integrarlos en el Documento Ambiental y en sus anejos de soporte.</span>
+              <span>Climograma y resumen climatico integrables en el Documento Ambiental. Si hay datos AEMET/estacion validos, se documenta la estacion seleccionada; si no, queda como pendiente de contraste tecnico.</span>
             </div>
             <div class="deliverable-card client">
               <strong>Planos del cliente</strong>

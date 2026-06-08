@@ -8,6 +8,7 @@ from pathlib import Path
 from eia_agent.core.client_official_maps import (
     build_catastro_wms_url,
     build_ign_topographic_wms_url,
+    build_noise_roads_lden_wms_url,
     build_pnoa_ortofoto_wms_url,
     build_red_natura_wms_url,
     build_snczi_q500_wms_url,
@@ -75,6 +76,14 @@ class TestClientOfficialMaps(unittest.TestCase):
         self.assertIn("SRS=EPSG%3A4326", url)
         self.assertIn("LAYERS=mtn_rasterizado", url)
 
+    def test_build_noise_roads_lden_wms_url_contains_required_parameters(self):
+        url = build_noise_roads_lden_wms_url(28.963, -13.551)
+
+        self.assertIn("SERVICE=WMS", url)
+        self.assertIn("REQUEST=GetMap", url)
+        self.assertIn("SRS=EPSG%3A4326", url)
+        self.assertIn("LAYERS=AM.NoiseRestrictionZone", url)
+
     def test_generate_client_official_maps_writes_png_with_fetcher(self):
         png = b"\x89PNG\r\n\x1a\n" + b"OFFICIAL"
 
@@ -90,12 +99,14 @@ class TestClientOfficialMaps(unittest.TestCase):
         ortho = self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-003_ortofoto_pnoa.png"
         flood = self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-004_inundabilidad_snczi_t500.png"
         topo = self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-005_topografico_ign.png"
+        noise = self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-006_ruido_carreteras_lden.png"
         self.assertEqual(out.read_bytes(), png)
         self.assertEqual(red.read_bytes(), png)
         self.assertEqual(ortho.read_bytes(), png)
         self.assertEqual(flood.read_bytes(), png)
         self.assertEqual(topo.read_bytes(), png)
-        self.assertEqual(len(result["maps"]), 5)
+        self.assertEqual(noise.read_bytes(), png)
+        self.assertEqual(len(result["maps"]), 6)
         self.assertTrue((self.tmp / "cartografia" / "mapas_oficiales_cliente.json").exists())
         self.assertFalse(result["administrative_ready"])
 
@@ -117,6 +128,7 @@ class TestClientOfficialMaps(unittest.TestCase):
         self.assertFalse((self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-003_ortofoto_pnoa.png").exists())
         self.assertFalse((self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-004_inundabilidad_snczi_t500.png").exists())
         self.assertFalse((self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-005_topografico_ign.png").exists())
+        self.assertFalse((self.tmp / "cartografia" / "mapas" / "MAP-OFICIAL-006_ruido_carreteras_lden.png").exists())
 
 
 if __name__ == "__main__":
