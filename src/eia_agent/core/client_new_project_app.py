@@ -468,6 +468,35 @@ def build_new_project_app_html(
     .review-summary.review {{ border-left-color: #d99b20; background: #fffdf8; }}
     .review-summary.ok {{ border-left-color: var(--ok); background: #fbfffd; }}
     .review-summary h3 {{ margin: 0; font-size: 16px; }}
+    .review-sections {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+    }}
+    .review-section {{
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      display: grid;
+      gap: 6px;
+    }}
+    .review-section strong {{ font-size: 14px; }}
+    .review-section small {{ color: var(--muted); line-height: 1.35; }}
+    .review-status {{
+      width: fit-content;
+      border-radius: 999px;
+      padding: 4px 9px;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      border: 1px solid var(--line);
+    }}
+    .review-status.ok {{ color: #116b3d; background: #e9f8ef; border-color: #bde8cd; }}
+    .review-status.review {{ color: #9a6200; background: #fff4d8; border-color: #f0d391; }}
+    .review-status.pending {{ color: #475569; background: #eef2f7; }}
+    .review-status.blocked {{ color: #a52020; background: #ffe9e9; border-color: #ffbcbc; }}
+    .review-status.running {{ color: #0f5d70; background: #e6f7fb; border-color: #b9e5ef; }}
     .review-counts {{
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -1162,6 +1191,7 @@ def build_new_project_app_html(
       const level = String(review.level || '').toUpperCase();
       const cls = level === 'BLOCKED' ? 'blocked' : (level === 'REVIEW_REQUIRED' ? 'review' : (level === 'RUNNING' ? '' : 'ok'));
       const counts = review.counts || {{}};
+      const sections = (review.sections || []).map(renderReviewSection).join('');
       const actions = (review.next_actions || []).map((item) => `<li>${{escapeHtml(item)}}</li>`).join('');
       return `
         <section class="review-summary ${{cls}}" aria-label="Resultado de revision">
@@ -1175,9 +1205,27 @@ def build_new_project_app_html(
             <div class="review-count"><strong>${{counts.bloqueante ?? 0}}</strong><span>Bloqueantes</span></div>
             <div class="review-count"><strong>${{counts.avisos ?? 0}}</strong><span>Avisos</span></div>
           </div>
+          ${{sections ? `<div class="review-sections">${{sections}}</div>` : ''}}
           ${{actions ? `<ul>${{actions}}</ul>` : ''}}
           <small class="muted">${{escapeHtml(review.disclaimer || '')}}</small>
         </section>`;
+    }}
+    function renderReviewSection(section) {{
+      const status = String(section.status || 'pending').toLowerCase();
+      const labels = {{
+        ok: 'OK',
+        review: 'Revisar',
+        pending: 'Pendiente',
+        blocked: 'Bloquea',
+        running: 'En curso'
+      }};
+      return `
+        <article class="review-section">
+          <span class="review-status ${{status}}">${{labels[status] || 'Revisar'}}</span>
+          <strong>${{escapeHtml(section.title || 'Area de revision')}}</strong>
+          <small>${{escapeHtml(section.detail || '')}}</small>
+          <small><b>Siguiente:</b> ${{escapeHtml(section.action || '')}}</small>
+        </article>`;
     }}
     function normaliseSteps(items = []) {{
       return items.map((item) => {{

@@ -576,6 +576,7 @@ def build_generation_review_summary(exp_path: Path, status: dict[str, Any]) -> d
     """Resume el resultado en lenguaje cliente sin declarar aptitud administrativa."""
     da_state = _read_json_file(exp_path / "documento" / "estado_expediente_da.json")
     steps = status.get("steps") if isinstance(status.get("steps"), list) else []
+    outputs = status.get("outputs") if isinstance(status.get("outputs"), list) else []
     failed_steps = [
         step for step in steps
         if str(step.get("status", "")).upper() in {"BLOCKED", "FAILED", "ERROR", "SKIPPED"}
@@ -589,6 +590,16 @@ def build_generation_review_summary(exp_path: Path, status: dict[str, Any]) -> d
     blockers = da_state.get("estado_bloqueante") if isinstance(da_state.get("estado_bloqueante"), list) else []
     pending = da_state.get("estado_pendiente") if isinstance(da_state.get("estado_pendiente"), list) else []
     closed = da_state.get("estado_cerrado") if isinstance(da_state.get("estado_cerrado"), list) else []
+    output_kinds = {str(item.get("kind") or "") for item in outputs if isinstance(item, dict)}
+    has_word = any(kind == "EDITABLE_WORD" for kind in output_kinds)
+    map_count = sum(
+        1 for item in outputs
+        if isinstance(item, dict) and (
+            str(item.get("kind") or "").startswith("OFFICIAL_")
+            or str(item.get("kind") or "") == "CARTOGRAPHY_IMAGE"
+        )
+    )
+    has_climate = "CLIMOGRAM" in output_kinds
 
     if failed_steps or blockers:
         level = "BLOCKED"
@@ -621,6 +632,58 @@ def build_generation_review_summary(exp_path: Path, status: dict[str, Any]) -> d
     if not next_actions:
         next_actions.append("Complete la entrada minima y ejecute la generacion.")
 
+    def _section(status_code: str, title_text: str, detail: str, action: str) -> dict[str, str]:
+        return {
+            "status": status_code,
+            "title": title_text,
+            "detail": detail,
+            "action": action,
+        }
+
+    if failed_steps or blockers:
+        audit_section = _section(
+            "blocked",
+            "Revision final",
+            "Hay bloqueos que impiden considerar el expediente cerrado.",
+            "Resolver bloqueos y volver a generar.",
+        )
+    elif da_state:
+        audit_section = _section(
+            "review",
+            "Revision final",
+            "Existe estado interno del expediente con elementos para revisar.",
+            "Comprobar pendientes y auditoria antes de presentar.",
+        )
+    else:
+        audit_section = _section(
+            "pending",
+            "Revision final",
+            "Aun no consta estado interno completo del Documento Ambiental.",
+            "Generar el expediente y revisar la auditoria.",
+        )
+
+    sections = [
+        _section(
+            "ok" if has_word else ("running" if str(status.get("status", "")).upper() == "RUNNING" else "pending"),
+            "Word editable",
+            "El Documento Ambiental editable esta disponible." if has_word else "Todavia no se ha detectado el Word editable generado.",
+            "Descargar y revisar tecnicamente." if has_word else "Generar el expediente cuando la entrada minima este completa.",
+        ),
+        _section(
+            "ok" if map_count >= 6 else ("review" if map_count else "pending"),
+            "Mapas y planos",
+            f"Se han detectado {map_count} salidas cartograficas.",
+            "Revisar que incluyen situacion, parcela, ortofoto, topografia, ruido y espacios protegidos.",
+        ),
+        _section(
+            "ok" if has_climate else "pending",
+            "Climograma",
+            "El climograma esta disponible." if has_climate else "No se ha detectado climograma generado.",
+            "Comprobar estacion, fuente y trazabilidad climatica." if has_climate else "Generar clima desde coordenadas o aportar datos trazables.",
+        ),
+        audit_section,
+    ]
+
     return {
         "level": level,
         "title": title,
@@ -633,6 +696,7 @@ def build_generation_review_summary(exp_path: Path, status: dict[str, Any]) -> d
             "avisos": len(warning_steps),
             "fallos": len(failed_steps),
         },
+        "sections": sections,
         "next_actions": next_actions[:5],
         "has_da_state": bool(da_state),
         "disclaimer": (

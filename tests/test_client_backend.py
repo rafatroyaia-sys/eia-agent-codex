@@ -193,6 +193,9 @@ class TestClientBackend(unittest.TestCase):
         self.assertEqual(summary["counts"]["cerrado"], 7)
         self.assertEqual(summary["counts"]["pendiente"], 2)
         self.assertEqual(summary["counts"]["avisos"], 1)
+        self.assertIn("Word editable", {section["title"] for section in summary["sections"]})
+        self.assertIn("Mapas y planos", {section["title"] for section in summary["sections"]})
+        self.assertIn("Climograma", {section["title"] for section in summary["sections"]})
         self.assertFalse(summary["administrative_ready"])
 
     def test_generation_review_summary_blocks_on_da_blockers(self):
@@ -208,6 +211,33 @@ class TestClientBackend(unittest.TestCase):
 
         self.assertEqual(summary["level"], "BLOCKED")
         self.assertEqual(summary["counts"]["bloqueante"], 1)
+
+    def test_generation_review_summary_marks_outputs_by_area(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+        exp_path = Path(result.expediente_path)
+
+        summary = build_generation_review_summary(
+            exp_path,
+            {
+                "status": "COMPLETED_WITH_REVIEW",
+                "steps": [],
+                "outputs": [
+                    {"kind": "EDITABLE_WORD"},
+                    {"kind": "OFFICIAL_NOISE_MAP"},
+                    {"kind": "OFFICIAL_TOPOGRAPHIC_MAP"},
+                    {"kind": "OFFICIAL_RED_NATURA_MAP"},
+                    {"kind": "OFFICIAL_ORTHOPHOTO_MAP"},
+                    {"kind": "OFFICIAL_CADASTRE_MAP"},
+                    {"kind": "OFFICIAL_FLOOD_MAP"},
+                    {"kind": "CLIMOGRAM"},
+                ],
+            },
+        )
+
+        sections = {section["title"]: section for section in summary["sections"]}
+        self.assertEqual(sections["Word editable"]["status"], "ok")
+        self.assertEqual(sections["Mapas y planos"]["status"], "ok")
+        self.assertEqual(sections["Climograma"]["status"], "ok")
 
     def test_generation_status_lists_visual_outputs(self):
         result = create_project_from_payload(self.tmp, self._payload())
