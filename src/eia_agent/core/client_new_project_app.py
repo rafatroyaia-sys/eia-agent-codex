@@ -439,11 +439,84 @@ def build_new_project_app_html(
       margin-top: 14px;
     }}
     .generation-box ul {{ margin: 8px 0 0; padding-left: 20px; }}
+    .result-banner {{
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(160px, 260px);
+      gap: 14px;
+      align-items: center;
+      background: white;
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--brand-2);
+      border-radius: 8px;
+      padding: 12px;
+    }}
+    .result-banner.ok {{ border-left-color: var(--ok); background: #fbfffd; }}
+    .result-banner.warn {{ border-left-color: #d99b20; background: #fffdf8; }}
+    .result-banner.danger {{ border-left-color: var(--danger); background: #fffafa; }}
+    .result-banner strong {{ display: block; margin-bottom: 4px; }}
+    .progress-label {{
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }}
+    .step-timeline {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+      margin-top: 14px;
+    }}
+    .step-card {{
+      background: white;
+      border: 1px solid var(--line);
+      border-left: 4px solid #b9c7bf;
+      border-radius: 8px;
+      padding: 10px;
+      min-width: 0;
+    }}
+    .step-card.ok {{ border-left-color: var(--ok); }}
+    .step-card.warn {{ border-left-color: #d99b20; }}
+    .step-card.danger {{ border-left-color: var(--danger); }}
+    .step-card.pending {{ opacity: .78; }}
+    .step-card strong {{
+      display: block;
+      margin-top: 5px;
+      overflow-wrap: anywhere;
+    }}
+    .step-card small {{
+      display: block;
+      color: var(--muted);
+      margin-top: 5px;
+      overflow-wrap: anywhere;
+    }}
+    .status-chip {{
+      display: inline-flex;
+      border-radius: 999px;
+      padding: 3px 8px;
+      font-size: 11px;
+      font-weight: 800;
+      background: #eef4ef;
+      color: var(--muted);
+      border: 1px solid var(--line);
+    }}
+    .status-chip.ok {{ background: var(--ok-bg); color: var(--ok); border-color: #a8dbc0; }}
+    .status-chip.warn {{ background: var(--warn-bg); color: var(--warn); border-color: #f0c36b; }}
+    .status-chip.danger {{ background: var(--danger-bg); color: var(--danger); border-color: #f2b4b2; }}
+    .output-section {{
+      margin-top: 16px;
+    }}
+    .output-section h3 {{
+      margin: 0 0 8px;
+      font-size: 15px;
+    }}
     .output-actions {{
       display: flex;
       flex-wrap: wrap;
       gap: 10px;
-      margin-top: 14px;
+      margin-top: 8px;
     }}
     .output-gallery {{
       display: grid;
@@ -489,6 +562,7 @@ def build_new_project_app_html(
       main {{ padding: 16px; }}
       .topbar button {{ flex: 1 1 210px; }}
       .storage-status {{ margin-left: 0; }}
+      .result-banner {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -986,12 +1060,28 @@ def build_new_project_app_html(
     }}
     function renderGeneration(title, message, items = [], outputs = []) {{
       const box = document.getElementById('generation-box');
-      const list = items.length ? `<ul>${{items.map((item) => `<li>${{item}}</li>`).join('')}}</ul>` : '';
       const visualOutputs = outputs.filter(isVisualOutput);
       const documentOutputs = outputs.filter((item) => !isVisualOutput(item));
+      const steps = normaliseSteps(items);
+      const progress = estimateGenerationProgress(title, steps, outputs);
+      const bannerClass = generationBannerClass(title, steps);
+      const timeline = renderStepTimeline(steps);
       const files = renderOutputButtons(documentOutputs);
       const gallery = renderVisualGallery(visualOutputs);
-      box.innerHTML = `<strong>${{title}}</strong><p class="muted">${{message || ''}}</p>${{list}}${{files}}${{gallery}}`;
+      box.innerHTML = `
+        <div class="result-banner ${{bannerClass}}">
+          <div>
+            <strong>${{escapeHtml(title)}}</strong>
+            <p class="muted">${{escapeHtml(message || '')}}</p>
+          </div>
+          <div>
+            <div class="progress-label"><span>Avance</span><span>${{progress}}%</span></div>
+            <div class="progress-line"><span style="width: ${{progress}}%"></span></div>
+          </div>
+        </div>
+        ${{timeline}}
+        ${{files}}
+        ${{gallery}}`;
       documentOutputs.forEach((item, idx) => {{
         box.querySelector(`[data-document-output="${{idx}}"]`)?.addEventListener('click', () => downloadOutput(item));
       }});
@@ -999,6 +1089,73 @@ def build_new_project_app_html(
         box.querySelector(`[data-visual-output="${{idx}}"]`)?.addEventListener('click', () => downloadOutput(item));
       }});
       loadVisualPreviews(visualOutputs);
+    }}
+    function normaliseSteps(items = []) {{
+      return items.map((item) => {{
+        if (typeof item === 'string') {{
+          const parts = item.split(':');
+          const status = parts.length > 1 ? parts.shift().trim() : 'PENDING';
+          return {{ status, label: parts.join(':').trim() || item, summary: '' }};
+        }}
+        return {{
+          status: item.status || 'PENDING',
+          label: item.label || item.step_id || 'Paso de generacion',
+          summary: item.summary || '',
+          step_id: item.step_id || ''
+        }};
+      }});
+    }}
+    function statusClass(status) {{
+      const value = String(status || '').toUpperCase();
+      if (value === 'OK' || value === 'COMPLETED_WITH_REVIEW') return 'ok';
+      if (value === 'WARNING' || value === 'RUNNING') return 'warn';
+      if (value === 'BLOCKED' || value === 'FAILED' || value === 'ERROR') return 'danger';
+      return 'pending';
+    }}
+    function statusLabel(status) {{
+      const value = String(status || '').toUpperCase();
+      if (value === 'OK') return 'Completado';
+      if (value === 'WARNING') return 'Aviso';
+      if (value === 'BLOCKED') return 'Bloqueado';
+      if (value === 'FAILED') return 'Error';
+      if (value === 'RUNNING') return 'En curso';
+      return 'Pendiente';
+    }}
+    function generationBannerClass(title, steps = []) {{
+      const text = String(title || '').toUpperCase();
+      if (text.includes('BLOCKED') || text.includes('FAILED') || steps.some((step) => statusClass(step.status) === 'danger')) return 'danger';
+      if (text.includes('COMPLETED') || text.includes('COMPLETA')) return steps.some((step) => statusClass(step.status) === 'warn') ? 'warn' : 'ok';
+      if (steps.some((step) => statusClass(step.status) === 'warn')) return 'warn';
+      return '';
+    }}
+    function estimateGenerationProgress(title, steps = [], outputs = []) {{
+      const text = String(title || '').toUpperCase();
+      if (text.includes('COMPLETED') || text.includes('COMPLETA')) return 100;
+      if (text.includes('BLOCKED') || text.includes('FAILED')) return Math.max(10, Math.round((steps.length / 7) * 100));
+      if (!steps.length && outputs.length) return 100;
+      if (!steps.length) return text.includes('INICIADA') ? 8 : 0;
+      const closed = steps.filter((step) => ['ok', 'warn', 'danger'].includes(statusClass(step.status))).length;
+      return Math.min(96, Math.max(12, Math.round((closed / 7) * 100)));
+    }}
+    function renderStepTimeline(steps = []) {{
+      if (!steps.length) return '';
+      return `
+        <div class="step-timeline" aria-label="Avance por fases">
+          ${{steps.map((step) => {{
+            const cls = statusClass(step.status);
+            return `
+              <article class="step-card ${{cls}}">
+                <span class="status-chip ${{cls}}">${{statusLabel(step.status)}}</span>
+                <strong>${{escapeHtml(step.label)}}</strong>
+                ${{step.summary ? `<small>${{escapeHtml(shortSummary(step.summary))}}</small>` : ''}}
+              </article>
+            `;
+          }}).join('')}}
+        </div>`;
+    }}
+    function shortSummary(value) {{
+      const text = String(value || '').replace(/\\s+/g, ' ').trim();
+      return text.length > 180 ? `${{text.slice(0, 177)}}...` : text;
     }}
     function isVisualOutput(item) {{
       const kind = String(item.kind || '').toUpperCase();
@@ -1014,7 +1171,11 @@ def build_new_project_app_html(
     }}
     function renderOutputButtons(outputs = []) {{
       if (!outputs.length) return '';
-      return `<div class="output-actions">${{outputs.map((item, idx) => `<button class="secondary output-download" data-document-output="${{idx}}">${{escapeHtml(item.label || 'Descargar documento')}}: ${{escapeHtml(item.name || '')}}</button>`).join('')}}</div>`;
+      return `
+        <div class="output-section">
+          <h3>Documentos y paquetes generados</h3>
+          <div class="output-actions">${{outputs.map((item, idx) => `<button class="secondary output-download" data-document-output="${{idx}}">${{escapeHtml(item.label || 'Descargar documento')}}: ${{escapeHtml(item.name || '')}}</button>`).join('')}}</div>
+        </div>`;
     }}
     function escapeHtml(value) {{
       return String(value || '').replace(/[&<>"']/g, (char) => ({{
@@ -1028,15 +1189,18 @@ def build_new_project_app_html(
     function renderVisualGallery(outputs = []) {{
       if (!outputs.length) return '';
       return `
-        <div class="output-gallery" aria-label="Vista previa de mapas, planos y climograma">
-          ${{outputs.map((item, idx) => `
-            <article class="output-card">
-              <img data-preview-output="${{idx}}" alt="${{escapeHtml(item.label || item.name || 'Mapa generado')}}" />
-              <strong>${{escapeHtml(item.label || item.name || 'Salida visual')}}</strong>
-              <span class="output-meta">${{escapeHtml(item.name || '')}}</span>
-              <button class="secondary output-download" data-visual-output="${{idx}}">Descargar imagen</button>
-            </article>
-          `).join('')}}
+        <div class="output-section">
+          <h3>Mapas, planos y climograma</h3>
+          <div class="output-gallery" aria-label="Vista previa de mapas, planos y climograma">
+            ${{outputs.map((item, idx) => `
+              <article class="output-card">
+                <img data-preview-output="${{idx}}" alt="${{escapeHtml(item.label || item.name || 'Mapa generado')}}" />
+                <strong>${{escapeHtml(item.label || item.name || 'Salida visual')}}</strong>
+                <span class="output-meta">${{escapeHtml(item.name || '')}}</span>
+                <button class="secondary output-download" data-visual-output="${{idx}}">Descargar imagen</button>
+              </article>
+            `).join('')}}
+          </div>
         </div>
       `;
     }}
@@ -1110,8 +1274,7 @@ def build_new_project_app_html(
         return;
       }}
       const generation = body.generation;
-      const stepItems = (generation.steps || []).map((step) => `${{step.status}}: ${{step.label}}`);
-      renderGeneration(`Estado: ${{generation.status}}`, generation.message, stepItems, generation.outputs || []);
+      renderGeneration(`Estado: ${{generation.status}}`, generation.message, generation.steps || [], generation.outputs || []);
       if (generation.status === 'RUNNING') setTimeout(pollGeneration, 5000);
       else document.getElementById('generate-document').disabled = false;
     }}
