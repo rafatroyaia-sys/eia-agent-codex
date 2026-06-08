@@ -572,6 +572,76 @@ def list_generated_outputs(exp_path: Path) -> list[dict[str, Any]]:
     return sorted(outputs, key=lambda item: (item["priority"], item["name"].lower()))
 
 
+def build_generation_review_summary(exp_path: Path, status: dict[str, Any]) -> dict[str, Any]:
+    """Resume el resultado en lenguaje cliente sin declarar aptitud administrativa."""
+    da_state = _read_json_file(exp_path / "documento" / "estado_expediente_da.json")
+    steps = status.get("steps") if isinstance(status.get("steps"), list) else []
+    failed_steps = [
+        step for step in steps
+        if str(step.get("status", "")).upper() in {"BLOCKED", "FAILED", "ERROR", "SKIPPED"}
+    ]
+    warning_steps = [
+        step for step in steps
+        if str(step.get("status", "")).upper() == "WARNING"
+    ]
+
+    counts = da_state.get("counts") if isinstance(da_state.get("counts"), dict) else {}
+    blockers = da_state.get("estado_bloqueante") if isinstance(da_state.get("estado_bloqueante"), list) else []
+    pending = da_state.get("estado_pendiente") if isinstance(da_state.get("estado_pendiente"), list) else []
+    closed = da_state.get("estado_cerrado") if isinstance(da_state.get("estado_cerrado"), list) else []
+
+    if failed_steps or blockers:
+        level = "BLOCKED"
+        title = "No listo: requiere correcciones"
+        message = "Hay bloqueos o fallos que deben resolverse antes de considerar el expediente para revision final."
+    elif str(status.get("status", "")).upper() == "COMPLETED_WITH_REVIEW":
+        level = "REVIEW_REQUIRED"
+        title = "Borrador listo para revision tecnica"
+        message = "El Word y sus anexos se han generado. Revise pendientes, avisos, mapas, climograma y auditoria antes de presentar."
+    elif str(status.get("status", "")).upper() == "RUNNING":
+        level = "RUNNING"
+        title = "Generacion en curso"
+        message = "La app esta procesando el expediente y actualizara los resultados al finalizar."
+    else:
+        level = "PENDING"
+        title = "Pendiente de generar"
+        message = "Guarde, valide y genere el Documento Ambiental para ver el resultado de revision."
+
+    next_actions: list[str] = []
+    if failed_steps:
+        next_actions.append("Revise el paso bloqueado y complete los datos o documentos indicados.")
+    if blockers:
+        next_actions.append("Resuelva los elementos bloqueantes del estado del expediente.")
+    if pending:
+        next_actions.append("Revise los elementos pendientes antes de usar el Word como version final.")
+    if warning_steps:
+        next_actions.append("Compruebe los avisos de mapas, climograma o control documental.")
+    if not next_actions and level == "REVIEW_REQUIRED":
+        next_actions.append("Descargue el Word editable y revise el contenido tecnico antes de presentar.")
+    if not next_actions:
+        next_actions.append("Complete la entrada minima y ejecute la generacion.")
+
+    return {
+        "level": level,
+        "title": title,
+        "message": message,
+        "administrative_ready": False,
+        "counts": {
+            "cerrado": int(counts.get("CERRADO", len(closed)) or 0),
+            "pendiente": int(counts.get("PENDIENTE", len(pending)) or 0),
+            "bloqueante": int(counts.get("BLOQUEANTE", len(blockers)) or 0),
+            "avisos": len(warning_steps),
+            "fallos": len(failed_steps),
+        },
+        "next_actions": next_actions[:5],
+        "has_da_state": bool(da_state),
+        "disclaimer": (
+            "Resultado interno de revision. No equivale a aptitud administrativa "
+            "ni a informe del organo ambiental."
+        ),
+    }
+
+
 def get_generation_status(workspace: str | Path, project_id: str) -> dict[str, Any]:
     exp_path = _expediente_path(workspace, project_id)
     if not exp_path.exists():
@@ -586,6 +656,7 @@ def get_generation_status(workspace: str | Path, project_id: str) -> dict[str, A
             "steps": [],
         }
     status["outputs"] = list_generated_outputs(exp_path)
+    status["review_summary"] = build_generation_review_summary(exp_path, status)
     return status
 
 

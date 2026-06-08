@@ -454,6 +454,33 @@ def build_new_project_app_html(
     .result-banner.warn {{ border-left-color: #d99b20; background: #fffdf8; }}
     .result-banner.danger {{ border-left-color: var(--danger); background: #fffafa; }}
     .result-banner strong {{ display: block; margin-bottom: 4px; }}
+    .review-summary {{
+      display: grid;
+      gap: 10px;
+      background: white;
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--brand-2);
+      border-radius: 8px;
+      padding: 12px;
+      margin-top: 12px;
+    }}
+    .review-summary.blocked {{ border-left-color: var(--danger); background: #fffafa; }}
+    .review-summary.review {{ border-left-color: #d99b20; background: #fffdf8; }}
+    .review-summary.ok {{ border-left-color: var(--ok); background: #fbfffd; }}
+    .review-summary h3 {{ margin: 0; font-size: 16px; }}
+    .review-counts {{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+    }}
+    .review-count {{
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px;
+    }}
+    .review-count strong {{ display: block; font-size: 20px; }}
+    .review-count span {{ color: var(--muted); font-size: 12px; }}
     .progress-label {{
       display: flex;
       justify-content: space-between;
@@ -1096,13 +1123,14 @@ def build_new_project_app_html(
       await validateInBackend();
       await loadBackendProjects();
     }}
-    function renderGeneration(title, message, items = [], outputs = []) {{
+    function renderGeneration(title, message, items = [], outputs = [], review = null) {{
       const box = document.getElementById('generation-box');
       const visualOutputs = outputs.filter(isVisualOutput);
       const documentOutputs = outputs.filter((item) => !isVisualOutput(item));
       const steps = normaliseSteps(items);
       const progress = estimateGenerationProgress(title, steps, outputs);
       const bannerClass = generationBannerClass(title, steps);
+      const reviewBlock = renderReviewSummary(review);
       const timeline = renderStepTimeline(steps);
       const files = renderOutputButtons(documentOutputs);
       const gallery = renderVisualGallery(visualOutputs);
@@ -1117,6 +1145,7 @@ def build_new_project_app_html(
             <div class="progress-line"><span style="width: ${{progress}}%"></span></div>
           </div>
         </div>
+        ${{reviewBlock}}
         ${{timeline}}
         ${{files}}
         ${{gallery}}`;
@@ -1127,6 +1156,28 @@ def build_new_project_app_html(
         box.querySelector(`[data-visual-output="${{idx}}"]`)?.addEventListener('click', () => downloadOutput(item));
       }});
       loadVisualPreviews(visualOutputs);
+    }}
+    function renderReviewSummary(review) {{
+      if (!review) return '';
+      const level = String(review.level || '').toUpperCase();
+      const cls = level === 'BLOCKED' ? 'blocked' : (level === 'REVIEW_REQUIRED' ? 'review' : (level === 'RUNNING' ? '' : 'ok'));
+      const counts = review.counts || {{}};
+      const actions = (review.next_actions || []).map((item) => `<li>${{escapeHtml(item)}}</li>`).join('');
+      return `
+        <section class="review-summary ${{cls}}" aria-label="Resultado de revision">
+          <div>
+            <h3>${{escapeHtml(review.title || 'Resultado de revision')}}</h3>
+            <p class="muted">${{escapeHtml(review.message || '')}}</p>
+          </div>
+          <div class="review-counts">
+            <div class="review-count"><strong>${{counts.cerrado ?? 0}}</strong><span>Cerrados</span></div>
+            <div class="review-count"><strong>${{counts.pendiente ?? 0}}</strong><span>Pendientes</span></div>
+            <div class="review-count"><strong>${{counts.bloqueante ?? 0}}</strong><span>Bloqueantes</span></div>
+            <div class="review-count"><strong>${{counts.avisos ?? 0}}</strong><span>Avisos</span></div>
+          </div>
+          ${{actions ? `<ul>${{actions}}</ul>` : ''}}
+          <small class="muted">${{escapeHtml(review.disclaimer || '')}}</small>
+        </section>`;
     }}
     function normaliseSteps(items = []) {{
       return items.map((item) => {{
@@ -1312,7 +1363,7 @@ def build_new_project_app_html(
         return;
       }}
       const generation = body.generation;
-      renderGeneration(`Estado: ${{generation.status}}`, generation.message, generation.steps || [], generation.outputs || []);
+      renderGeneration(`Estado: ${{generation.status}}`, generation.message, generation.steps || [], generation.outputs || [], generation.review_summary || null);
       if (generation.status === 'RUNNING') setTimeout(pollGeneration, 5000);
       else document.getElementById('generate-document').disabled = false;
     }}

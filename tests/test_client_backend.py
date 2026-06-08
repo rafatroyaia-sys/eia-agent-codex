@@ -14,6 +14,7 @@ from eia_agent.core.client_backend import (
     CLIENT_ENTRY_FILE,
     CLIENT_FILES_INDEX,
     GENERATION_STEPS,
+    build_generation_review_summary,
     build_project_readiness,
     build_project_backup,
     build_generate_plan,
@@ -165,7 +166,48 @@ class TestClientBackend(unittest.TestCase):
 
         self.assertEqual(status["status"], "NOT_STARTED")
         self.assertEqual(status["outputs"], [])
+        self.assertEqual(status["review_summary"]["level"], "PENDING")
         self.assertFalse(status["administrative_ready"])
+
+    def test_generation_review_summary_reads_da_state(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+        exp_path = Path(result.expediente_path)
+        da_state = {
+            "counts": {"CERRADO": 7, "PENDIENTE": 2, "BLOQUEANTE": 0},
+            "estado_cerrado": [{}, {}, {}],
+            "estado_pendiente": [{"item": "Clima"}],
+            "estado_bloqueante": [],
+        }
+        (exp_path / "documento").mkdir(parents=True, exist_ok=True)
+        (exp_path / "documento" / "estado_expediente_da.json").write_text(
+            json.dumps(da_state),
+            encoding="utf-8",
+        )
+
+        summary = build_generation_review_summary(
+            exp_path,
+            {"status": "COMPLETED_WITH_REVIEW", "steps": [{"status": "WARNING", "label": "Clima"}]},
+        )
+
+        self.assertEqual(summary["level"], "REVIEW_REQUIRED")
+        self.assertEqual(summary["counts"]["cerrado"], 7)
+        self.assertEqual(summary["counts"]["pendiente"], 2)
+        self.assertEqual(summary["counts"]["avisos"], 1)
+        self.assertFalse(summary["administrative_ready"])
+
+    def test_generation_review_summary_blocks_on_da_blockers(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+        exp_path = Path(result.expediente_path)
+        (exp_path / "documento").mkdir(parents=True, exist_ok=True)
+        (exp_path / "documento" / "estado_expediente_da.json").write_text(
+            json.dumps({"estado_bloqueante": [{"item": "Objeto no cerrado"}]}),
+            encoding="utf-8",
+        )
+
+        summary = build_generation_review_summary(exp_path, {"status": "COMPLETED_WITH_REVIEW", "steps": []})
+
+        self.assertEqual(summary["level"], "BLOCKED")
+        self.assertEqual(summary["counts"]["bloqueante"], 1)
 
     def test_generation_status_lists_visual_outputs(self):
         result = create_project_from_payload(self.tmp, self._payload())
