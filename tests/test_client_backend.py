@@ -134,6 +134,30 @@ class TestClientBackend(unittest.TestCase):
         self.assertFalse(readiness["administrative_ready"])
         self.assertEqual(readiness["blockers"], [])
 
+    def test_readiness_reports_recommended_quality_without_blocking(self):
+        result = create_project_from_payload(self.tmp, self._payload())
+        for control_id in ("DOC-001", "DOC-002", "DOC-004"):
+            save_project_upload(
+                self.tmp,
+                result.project_id,
+                control_id,
+                f"{control_id}.pdf",
+                b"PDF",
+                "application/pdf",
+            )
+
+        readiness = build_project_readiness(self.tmp, result.project_id)
+
+        self.assertTrue(readiness["ready_for_generation"])
+        self.assertEqual(readiness["blockers"], [])
+        self.assertGreater(readiness["quality_score"], 0)
+        self.assertLess(readiness["quality_score"], 100)
+        self.assertEqual(
+            {item["control_id"] for item in readiness["missing_recommended_documents"]},
+            {"DOC-003", "DOC-005", "DOC-006"},
+        )
+        self.assertTrue(readiness["quality_tips"])
+
     def test_generation_status_starts_as_not_started(self):
         result = create_project_from_payload(self.tmp, self._payload())
 

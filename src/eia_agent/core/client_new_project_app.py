@@ -603,6 +603,7 @@ def build_new_project_app_html(
     <section class="summary">
       <div class="metric"><strong id="score-required">0/6</strong><span>Datos esenciales</span></div>
       <div class="metric"><strong id="score-files">0/{len(required_uploads)}</strong><span>Bloques documentales</span></div>
+      <div class="metric"><strong id="score-quality">0%</strong><span>Calidad de entrada</span></div>
       <div class="metric"><strong>{len(maps)}</strong><span>Mapas/planos esperados</span></div>
       <div class="metric"><strong id="score-status">Pendiente</strong><span>Estado de entrada</span></div>
       <div class="metric"><strong id="backend-project">Sin crear</strong><span>Expediente backend</span></div>
@@ -616,6 +617,8 @@ def build_new_project_app_html(
         <ul class="checklist" id="checklist"></ul>
         <h3>Que falta ahora</h3>
         <ul class="missing-list" id="missing-list"></ul>
+        <h3>Mejoras recomendadas</h3>
+        <ul class="missing-list" id="quality-list"></ul>
       </aside>
       <div>
         <section class="panel">
@@ -783,20 +786,28 @@ def build_new_project_app_html(
     function validate(data) {{
       const missingFields = essentialFields.filter((id) => !data.project[id]);
       const missingFiles = data.files.filter((f) => f.required && f.priority === 'ALTA' && f.selected_files.length === 0);
+      const recommendedFiles = data.files.filter((f) => !(f.required && f.priority === 'ALTA'));
+      const missingRecommendedFiles = recommendedFiles.filter((f) => f.selected_files.length === 0);
       const coordinateOk = /^-?\\d{{1,2}}([\\.,]\\d+)?\\s*,\\s*-?\\d{{1,3}}([\\.,]\\d+)?$/.test(data.project.coordinates_wgs84 || '');
       const blockers = [
         ...missingFields.map((id) => fieldActions[id] || `Complete ${{fieldLabels[id] || id}}.`),
         ...missingFiles.map((f) => `Suba ${{f.label.toLowerCase()}}.`)
       ];
       if (data.project.coordinates_wgs84 && !coordinateOk) blockers.push('Revise las coordenadas: use el formato latitud, longitud. Ejemplo: 28.123456, -16.123456.');
+      const qualityTotal = essentialFields.length + data.files.length;
+      const qualityComplete = (essentialFields.length - missingFields.length) + data.files.filter((f) => f.selected_files.length > 0).length;
       return {{
         essential_complete: essentialFields.length - missingFields.length,
         essential_total: essentialFields.length,
         high_files_complete: data.files.filter((f) => f.required && f.priority === 'ALTA' && f.selected_files.length > 0).length,
         high_files_total: data.files.filter((f) => f.required && f.priority === 'ALTA').length,
+        recommended_files_complete: recommendedFiles.length - missingRecommendedFiles.length,
+        recommended_files_total: recommendedFiles.length,
         missing_fields: missingFields,
         missing_high_files: missingFiles.map((f) => f.control_id),
+        missing_recommended_files: missingRecommendedFiles.map((f) => f.control_id),
         coordinate_format_ok: coordinateOk,
+        quality_score: Math.round((qualityComplete / Math.max(qualityTotal, 1)) * 100),
         blockers,
         ready_for_engine: blockers.length === 0
       }};
@@ -805,12 +816,15 @@ def build_new_project_app_html(
       const data = currentProject();
       const requiredMetric = document.getElementById('score-required');
       const filesMetric = document.getElementById('score-files');
+      const qualityMetric = document.getElementById('score-quality');
       const statusMetric = document.getElementById('score-status');
       requiredMetric.textContent = `${{data.validation.essential_complete}}/${{data.validation.essential_total}}`;
       filesMetric.textContent = `${{data.validation.high_files_complete}}/${{data.validation.high_files_total}}`;
+      qualityMetric.textContent = `${{data.validation.quality_score}}%`;
       statusMetric.textContent = data.validation.ready_for_engine ? 'Completa' : 'Pendiente';
       requiredMetric.closest('.metric').className = `metric ${{data.validation.essential_complete === data.validation.essential_total ? 'ok' : 'warn'}}`;
       filesMetric.closest('.metric').className = `metric ${{data.validation.high_files_complete === data.validation.high_files_total ? 'ok' : 'warn'}}`;
+      qualityMetric.closest('.metric').className = `metric ${{data.validation.quality_score >= 80 ? 'ok' : 'warn'}}`;
       statusMetric.closest('.metric').className = `metric ${{data.validation.ready_for_engine ? 'ok' : 'warn'}}`;
       document.getElementById('backend-project').textContent = backendProjectId || 'Sin crear';
       document.getElementById('download-backup').disabled = !backendProjectId;
@@ -830,6 +844,7 @@ def build_new_project_app_html(
         list.appendChild(li);
       }});
       renderMissingList(data);
+      renderQualityList(data);
     }}
     function renderMissingList(data) {{
       const box = document.getElementById('missing-list');
@@ -850,6 +865,23 @@ def build_new_project_app_html(
       messages.slice(0, 6).forEach((message) => {{
         const li = document.createElement('li');
         li.textContent = message;
+        box.appendChild(li);
+      }});
+    }}
+    function renderQualityList(data) {{
+      const box = document.getElementById('quality-list');
+      box.innerHTML = '';
+      const missing = data.validation.missing_recommended_files || [];
+      if (!missing.length) {{
+        const li = document.createElement('li');
+        li.className = 'ok';
+        li.textContent = 'Entrada reforzada: incluye tambien los aportes recomendados.';
+        box.appendChild(li);
+        return;
+      }}
+      missing.slice(0, 5).forEach((id) => {{
+        const li = document.createElement('li');
+        li.textContent = `Recomendado: aporte ${{uploadLabel(id).toLowerCase()}} si dispone de ello.`;
         box.appendChild(li);
       }});
     }}
@@ -881,6 +913,12 @@ def build_new_project_app_html(
       if (generateDisabled) {{
         title.textContent = 'Siguiente paso: validar documentacion';
         copy.textContent = 'El expediente ya esta guardado. Pulse validar para que la app revise si puede generar el Documento Ambiental.';
+        return;
+      }}
+      const missingRecommended = data.validation.missing_recommended_files || [];
+      if (missingRecommended.length) {{
+        title.textContent = 'Siguiente paso: generar o reforzar calidad';
+        copy.textContent = `Ya puede generar. Para mejorar el informe, puede aportar: ${{missingRecommended.slice(0, 3).map(uploadLabel).join(', ')}}. Si no lo tiene, continue con la generacion.`;
         return;
       }}
       title.textContent = 'Siguiente paso: generar Documento Ambiental';

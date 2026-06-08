@@ -72,6 +72,11 @@ REQUIRED_HIGH_DOCUMENTS = {
     "DOC-002": "Memoria de explotacion u operaciones",
     "DOC-004": "Planos o esquemas",
 }
+RECOMMENDED_QUALITY_DOCUMENTS = {
+    "DOC-003": "Fotografias del emplazamiento",
+    "DOC-005": "Cartografia aportada",
+    "DOC-006": "Alternativas estudiadas o confirmacion de propuesta",
+}
 GENERATION_STEPS = [
     ("FASE_1", "Procesar memorias y evidencias", ["phase1", "--write"]),
     ("FASE_2", "Cerrar el objeto evaluado", ["phase2", "--write"]),
@@ -439,6 +444,22 @@ def build_project_readiness(workspace: str | Path, project_id: str) -> dict[str,
         for key, label in REQUIRED_HIGH_DOCUMENTS.items()
         if key not in uploaded_ids
     ]
+    missing_recommended_documents = [
+        {"control_id": key, "label": label}
+        for key, label in RECOMMENDED_QUALITY_DOCUMENTS.items()
+        if key not in uploaded_ids
+    ]
+    recommended_total = len(RECOMMENDED_QUALITY_DOCUMENTS)
+    recommended_complete = recommended_total - len(missing_recommended_documents)
+    quality_total = len(ESSENTIAL_PROJECT_FIELDS) + len(REQUIRED_HIGH_DOCUMENTS) + recommended_total
+    quality_complete = (
+        len(ESSENTIAL_PROJECT_FIELDS)
+        - len(missing_fields)
+        + len(REQUIRED_HIGH_DOCUMENTS)
+        - len(missing_documents)
+        + recommended_complete
+    )
+    quality_score = round((quality_complete / quality_total) * 100) if quality_total else 0
     blockers = [
         *[f"Falta dato esencial: {item['label']}" for item in missing_fields],
         *[f"Falta documento prioritario: {item['label']}" for item in missing_documents],
@@ -451,8 +472,16 @@ def build_project_readiness(workspace: str | Path, project_id: str) -> dict[str,
         "administrative_ready": False,
         "missing_fields": missing_fields,
         "missing_documents": missing_documents,
+        "missing_recommended_documents": missing_recommended_documents,
         "coordinate_format_ok": coordinate_ok,
         "uploaded_files": len(files),
+        "quality_score": quality_score,
+        "quality_complete": quality_complete,
+        "quality_total": quality_total,
+        "quality_tips": [
+            f"Aporte {item['label'].lower()} para reforzar el Documento Ambiental."
+            for item in missing_recommended_documents
+        ],
         "blockers": blockers,
         "note": (
             "Superar esta validacion permite generar un borrador tecnico. "
