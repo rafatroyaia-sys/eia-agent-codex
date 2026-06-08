@@ -97,11 +97,13 @@ class TestClientBackend(unittest.TestCase):
 
         self.assertIn("phase1 --write", plan["commands"])
         self.assertIn("phase4-offline --write", plan["commands"])
+        self.assertIn("client-climate-traceability --write", plan["commands"])
         self.assertIn("cliente-app-package --write", plan["commands"])
         generation_commands = [" ".join(step[2]) for step in GENERATION_STEPS]
         self.assertIn("cartography-plan --write", generation_commands)
         self.assertIn("schematic-maps --write", generation_commands)
         self.assertIn("__official_maps__", generation_commands)
+        self.assertIn("__client_climate__", generation_commands)
         self.assertFalse(plan["administrative_ready"])
         self.assertIn("gates", plan["note"].lower())
 

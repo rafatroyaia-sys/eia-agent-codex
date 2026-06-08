@@ -18,7 +18,7 @@ Proporciona acceso desde consola a los módulos de productización:
   document-prepare-presentation, audit-positive-gaps,
   document-structure, document-numbering, document-toc, cliente-intake,
   cliente-form-schema, cliente-submission-check, cliente-plan,
-  cliente-dashboard, cliente-portal, cliente-portal-site, cliente-trial-package,
+  cliente-dashboard, cliente-climate-traceability, cliente-portal, cliente-portal-site, cliente-trial-package,
   cliente-app-package, cliente-backend.
 
 Uso:
@@ -55,6 +55,7 @@ Uso:
     python run_expediente.py <expediente> cliente-submission-check [--write]
     python run_expediente.py <expediente> cliente-plan [--write]
     python run_expediente.py <expediente> cliente-dashboard [--write]
+    python run_expediente.py <expediente> cliente-climate-traceability [--write]
     python run_expediente.py <expediente> cliente-portal [--write]
     python run_expediente.py <expediente> cliente-portal-site [--write]
     python run_expediente.py <expediente> cliente-trial-package [--write]
@@ -1971,6 +1972,27 @@ def cmd_cliente_dashboard(exp_path: Path, write: bool) -> int:
     return 0 if not result.warnings else 1
 
 
+def cmd_cliente_climate_traceability(exp_path: Path, write: bool) -> int:
+    """Control cliente: trazabilidad de climograma, estacion y datos."""
+    from eia_agent.core.client_climate_traceability import build_client_climate_traceability
+
+    try:
+        result = build_client_climate_traceability(exp_path, write_outputs=write)
+    except Exception as exc:
+        print(f"Error generando trazabilidad climatica cliente: {exc}", file=sys.stderr)
+        return 1
+
+    print(f"Estado climatico cliente: {result.get('status')}")
+    for warning in result.get("warnings") or []:
+        print(f"  AVISO: {warning}")
+    if write:
+        print("\nOutputs escritos:")
+        print(f"  {exp_path / 'clima' / 'trazabilidad_climatica_cliente.json'}")
+        print(f"  {exp_path / 'clima' / 'trazabilidad_climatica_cliente.md'}")
+
+    return 0
+
+
 def cmd_cliente_form_schema(exp_path: Path, write: bool) -> int:
     """Form schema cliente: controles y validaciones minimas para UI/API."""
     from eia_agent.core.client_form_schema import (
@@ -2973,6 +2995,19 @@ Ejemplos:
         help="Escribir documento/cliente_dashboard.json y .md.",
     )
 
+    climate_trace_p = sub.add_parser(
+        "cliente-climate-traceability",
+        help=(
+            "Comprobar trazabilidad cliente del climograma: coordenadas, estacion, "
+            "datos y figura disponible. No declara aptitud."
+        ),
+    )
+    climate_trace_p.add_argument(
+        "--write",
+        action="store_true",
+        help="Escribir clima/trazabilidad_climatica_cliente.json y .md.",
+    )
+
     portal_p = sub.add_parser(
         "cliente-portal",
         help=(
@@ -3192,6 +3227,8 @@ def main(argv=None) -> int:
         return cmd_cliente_submission_check(exp_path, args.write)
     if args.command == "cliente-dashboard":
         return cmd_cliente_dashboard(exp_path, args.write)
+    if args.command == "cliente-climate-traceability":
+        return cmd_cliente_climate_traceability(exp_path, args.write)
     if args.command == "cliente-portal":
         return cmd_cliente_portal(exp_path, args.write)
     if args.command == "cliente-portal-site":

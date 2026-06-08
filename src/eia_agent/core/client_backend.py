@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
+from eia_agent.core.client_climate_traceability import build_client_climate_traceability
 from eia_agent.core.client_official_maps import generate_client_official_maps
 from eia_agent.core.expediente_initializer import initialize_expediente, sanitize_expediente_id
 
@@ -78,6 +79,7 @@ GENERATION_STEPS = [
     ("CARTOGRAFIA_PLAN", "Preparar plan cartografico desde coordenadas", ["cartography-plan", "--write"]),
     ("CARTOGRAFIA_MAPAS", "Generar mapas tecnicos provisionales", ["schematic-maps", "--write"]),
     ("CARTOGRAFIA_OFICIAL", "Consultar cartografia oficial disponible", ["__official_maps__"]),
+    ("CLIMA_TRAZABILIDAD", "Comprobar trazabilidad del climograma", ["__client_climate__"]),
     ("DOCUMENTO", "Generar borrador tecnico y control documental", ["cliente-da", "--write"]),
 ]
 _GENERATION_LOCK = threading.Lock()
@@ -589,6 +591,23 @@ def _run_generation(workspace: Path, project_id: str) -> None:
                 }
                 status["steps"].append(step)
                 continue
+            if args == ["__client_climate__"]:
+                climate_result = build_client_climate_traceability(exp_path, write_outputs=True)
+                step_status = (
+                    "OK"
+                    if climate_result.get("status") == "CLIMOGRAM_WITH_STATION"
+                    else "WARNING"
+                )
+                step = {
+                    "step_id": step_id,
+                    "label": label,
+                    "return_code": 0,
+                    "status": step_status,
+                    "summary": "; ".join(climate_result.get("warnings") or [])
+                    or f"Estado climatico: {climate_result.get('status')}",
+                }
+                status["steps"].append(step)
+                continue
             result = subprocess.run(
                 [sys.executable, str(runner), str(exp_path), *args],
                 cwd=str(runner.parent),
@@ -673,6 +692,7 @@ def build_generate_plan(workspace: str | Path, project_id: str) -> dict[str, Any
         "phase2 --write",
         "phase3 --write",
         "phase4-offline --write",
+        "client-climate-traceability --write",
         "inventory-build --write",
         "inventory-gate --write",
         "run-technical-pipeline --write",
