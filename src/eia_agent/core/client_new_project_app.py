@@ -386,6 +386,40 @@ def build_new_project_app_html(
     }}
     .guidance strong {{ display: block; margin-bottom: 3px; }}
     .guidance p {{ margin: 0; color: var(--muted); }}
+    .client-guide {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 18px;
+    }}
+    .guide-card {{
+      background: white;
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--brand-2);
+      border-radius: 8px;
+      padding: 14px;
+      min-width: 0;
+    }}
+    .guide-card strong {{
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }}
+    .guide-card p {{
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.45;
+    }}
+    .guide-card.highlight {{
+      background: #f8fffa;
+      border-color: #bde4c9;
+    }}
+    .guide-card.warn {{
+      background: #fffdf8;
+      border-color: #f0d391;
+      border-left-color: #d99b20;
+    }}
     .progress-line {{
       height: 10px;
       background: #dce9e1;
@@ -612,7 +646,7 @@ def build_new_project_app_html(
     }}
     button:disabled {{ opacity: .45; cursor: not-allowed; }}
     @media (max-width: 980px) {{
-      .layout, .summary, .workflow, .deliverable-grid {{ grid-template-columns: 1fr; }}
+      .layout, .summary, .workflow, .client-guide, .deliverable-grid {{ grid-template-columns: 1fr; }}
       .guidance {{ grid-template-columns: 1fr; }}
       header {{ padding: 24px 20px; }}
       main {{ padding: 16px; }}
@@ -655,6 +689,20 @@ def build_new_project_app_html(
         <p id="next-action-copy">Complete identificacion, ubicacion, coordenadas, actividad y objeto evaluado para preparar el expediente.</p>
       </div>
       <div class="progress-line" aria-label="Progreso de entrada"><span id="progress-bar"></span></div>
+    </section>
+    <section class="client-guide" aria-label="Guia rapida para el cliente">
+      <article class="guide-card">
+        <strong>1. Que debe aportar</strong>
+        <p>Datos del proyecto, coordenadas WGS84, memorias tecnicas, memoria de explotacion, planos propios y fotos si las tiene.</p>
+      </article>
+      <article class="guide-card highlight">
+        <strong>2. Que automatiza la app</strong>
+        <p>Prepara el expediente, revisa minimos, genera mapas disponibles desde coordenadas, climograma, controles y Documento Ambiental editable.</p>
+      </article>
+      <article class="guide-card warn">
+        <strong>3. Que debe revisar antes de presentar</strong>
+        <p>El Word, los mapas, el climograma, los pendientes y la auditoria final. La app ayuda, pero no sustituye la revision tecnica.</p>
+      </article>
     </section>
     <section class="summary">
       <div class="metric"><strong id="score-required">0/6</strong><span>Datos esenciales</span></div>
@@ -753,6 +801,20 @@ def build_new_project_app_html(
         <section class="panel">
           <h2>4. Salida para generar el Documento Ambiental</h2>
           <p class="muted">Primero guarde el expediente y suba los archivos. Despues valide la documentacion. La generacion solo se inicia si no faltan datos o documentos prioritarios.</p>
+          <div class="deliverable-grid" aria-label="Salidas del expediente">
+            <div class="deliverable-card">
+              <strong>Word editable</strong>
+              <span>Documento Ambiental en formato DOCX para que el tecnico pueda revisar, corregir y terminar la version de trabajo.</span>
+            </div>
+            <div class="deliverable-card">
+              <strong>Mapas y clima integrados</strong>
+              <span>Mapas, planos disponibles, climograma y figuras se preparan para integrarse en el documento cuando existan datos trazables.</span>
+            </div>
+            <div class="deliverable-card client">
+              <strong>Copia completa</strong>
+              <span>Descarga de seguridad con expediente, entradas, archivos y salidas para conservar el trabajo aunque el servicio gratuito se reinicie.</span>
+            </div>
+          </div>
           <div class="actions">
             <button id="create-backend-bottom">1. Guardar expediente y subir archivos</button>
             <button class="secondary" id="validate-backend">2. Validar documentacion</button>
